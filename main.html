@@ -1,0 +1,58 @@
+<style>
+    @import url("https://webglfundamentals.org/webgl/resources/webgl-tutorials.css");
+    body {
+        margin: 0;
+    }
+    canvas {
+        width: 100vw;
+        height: 100vh;
+        display: block;
+    }
+    #ui {
+        width: 200px;
+    }
+
+</style>
+
+<script src="https://webglfundamentals.org/webgl/resources/webgl-utils.js"></script>
+<script src="https://webglfundamentals.org/webgl/resources/webgl-lessons-ui.js"></script>
+
+<script id="vertex-shader-3d" type="notjs">
+    attribute vec4 a_position;
+    attribute vec3 a_normal;
+
+    uniform mat4 u_viewMatrix;
+    uniform mat4 u_viewMatrixProjection;
+    varying vec3 v_normal;
+
+    void main() {
+        gl_Position = u_viewMatrixProjection * a_position;
+        v_normal = a_normal * mat3(u_viewMatrix);
+    }
+</script>
+    
+<script id="fragment-shader-3d" type="notjs">
+    precision mediump float;
+
+    uniform vec3 u_reverseLightDirection;
+    uniform vec4 u_color;
+    varying vec3 v_normal;
+
+    void main() {
+
+        vec3 normal = normalize(v_normal);
+
+        // light in [0,1]
+        float light = dot(normal, u_reverseLightDirection);
+        gl_FragColor = u_color;
+
+        gl_FragColor.rgb *= light;
+    }
+</script>
+<canvas id="canvas"></canvas>
+<div id="uiContainer">
+  <div id="ui">
+    <div id="cameraAngle"></div>
+  </div>
+</div>
+<script type="module" src="./index.js"></script>
