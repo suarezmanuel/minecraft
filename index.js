@@ -3,14 +3,26 @@ import { degToRad, m4 } from "./utils/math.js"
 
 "use strict";
 
-let keys = []
+var keys = []
 
-var cameraAngleRadians = degToRad(0);
+// var cameraAngleRadians = degToRad(0);
 var fieldOfViewRadians = degToRad(60);
 
-var cameraPosX = 0;
-var cameraPosY = 0;
-var cameraPosZ = 0;
+var cameraPos = [0,0,0];
+var up = [0,1,0];
+var forward = [0,0,1];
+var right = [1,0,0];
+// y axis rotation
+var cameraYaw = 0;
+// z axis rotation
+var cameraPitch = 0;
+var lookSpeed = 5;
+var zNear = 1;
+var zFar = 5000;
+
+// mouse
+var dx = 0;
+var dy = 0;
 
 // speeds[index]
 var speeds = [1, 5, 10, 20];
@@ -19,11 +31,13 @@ var index = 0;
 var sampler = new png_sampler();
 
 var cubeSize = 20;
-var cubeCountX = 80;
-var cubeCountY = 80;
+var cubeCountX = 10;
+var cubeCountY = 10;
 var mapSize = cubeCountX * cubeCountY;
 
 var fps = 0;
+var sumFrameTimes = 0;
+var frameCount = 0;
 
 var terrain = [];
 
@@ -60,10 +74,6 @@ async function main() {
 
   const clear_color = new ImGui.ImVec4(0.45, 0.55, 0.60, 1.00);
 
-  /* static */ let buf = "Quick brown fox";
-  /* static */ let f = 0.6;
-
-  let done = false;
 
   // setup gui ##################################
 
@@ -76,7 +86,7 @@ async function main() {
   var normalLocation = gl.getAttribLocation(program, "a_normal");
 
   // lookup uniforms
-  var viewMatrixLocation = gl.getUniformLocation(program, "u_viewMatrix");
+  var worldMatrixLocation = gl.getUniformLocation(program, "u_worldMatrix");
   var viewMatrixProjectionLocation = gl.getUniformLocation(program, "u_viewMatrixProjection");
   var colorLocation = gl.getUniformLocation(program, "u_color");
   var reverseLightDirectionLocation = gl.getUniformLocation(program, "u_reverseLightDirection");
@@ -91,8 +101,7 @@ async function main() {
   gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
   setNormals(gl);
 
-  drawScene();
-  // window.requestAnimationFrame(drawScene);
+  // drawScene();
 
   document.addEventListener("keydown", (event) => {
     // console.log(event.key);
@@ -103,40 +112,59 @@ async function main() {
     keys[event.key] = false;
   });
 
+  document.addEventListener('mousemove', (event) => {
+      if (document.pointerLockElement === canvas) {
+          dx = event.movementX;
+          dy = event.movementY;
+
+          dx /= canvas.width;
+          dy /= canvas.height;
+      }
+  })
+
+  canvas.addEventListener('click', (event) => {
+      canvas.requestPointerLock();
+  })
+
   setInterval(() => {
 
+    cameraYaw   += (dx * Math.PI) * lookSpeed * 60 / 1000;
+    let a = (dy * Math.PI/2) * lookSpeed * 60 / 1000;
+    cameraPitch = (Math.abs(cameraPitch - a) < 0.99*Math.PI/2) ?
+                  cameraPitch - a 
+                  : 
+                  Math.sign(cameraPitch)*0.99*Math.PI/2;
+
+    dx = 0;
+    dy = 0;
+
     // drawGui();
-    if (keys["ArrowRight"]) {
-      cameraAngleRadians += 0.01;
-    }
-
-    if (keys["ArrowLeft"]) {
-        cameraAngleRadians -= 0.01;
-    }
-
-    if (keys[' ']) {
-      cameraPosY += speeds[index];
-    }
-
-    if (keys['Shift']) {
-      cameraPosY -= speeds[index];
-    }
 
     if (keys['d']) {
-      cameraPosX += speeds[index];
+      cameraPos = m4.vectorSub(cameraPos, m4.vecScalarMultiply(right, speeds[index]));
     }
 
     if (keys['a']) {
-      cameraPosX -= speeds[index];
+      cameraPos = m4.vectorAdd(cameraPos, m4.vecScalarMultiply(right, speeds[index]));
+    }
+
+    if (keys[' ']) {
+      cameraPos = m4.vectorAdd(cameraPos, m4.vecScalarMultiply(up, speeds[index]));
+    }
+
+    if (keys['Shift']) {
+      cameraPos = m4.vectorSub(cameraPos, m4.vecScalarMultiply(up, speeds[index]));
     }
 
     if (keys['s']) {
-      cameraPosZ += speeds[index];
+      cameraPos = m4.vectorSub(cameraPos, m4.vecScalarMultiply(forward, speeds[index]));
     }
 
     if (keys['w']) {
-      cameraPosZ -= speeds[index];
+      cameraPos = m4.vectorAdd(cameraPos, m4.vecScalarMultiply(forward, speeds[index]));
     }
+
+    cameraPos = [Math.round(cameraPos[0]), Math.round(cameraPos[1]), Math.round(cameraPos[2])]
 
     if (keys['=']) {
       index = (index+1) % speeds.length;
@@ -144,16 +172,19 @@ async function main() {
       keys['='] = false;    
     }
 
-    drawScene();
   }, 20);
 
+
+  window.requestAnimationFrame(drawScene);
 
   // Draw the scene.
   function drawScene() {
 
+    let currentFrameTime = performance.now();
+
     webglUtils.resizeCanvasToDisplaySize(gl.canvas);
 
-     const glGUI = ImGui_Impl.gl;
+    const glGUI = ImGui_Impl.gl;
     glGUI && glGUI.viewport(0, 0, glGUI.drawingBufferWidth, glGUI.drawingBufferHeight);
     glGUI && glGUI.clearColor(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
     glGUI && glGUI.clear(glGUI.COLOR_BUFFER_BIT);
@@ -207,25 +238,28 @@ async function main() {
 
     // Compute the projection matrix
     var aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
-    var zNear = 1;
-    var zFar = 5000;
     var projectionMatrix = m4.perspective(fieldOfViewRadians, aspect, zNear, zFar);
 
-    // Compute a matrix for the camera
-    var cameraMatrix = m4.yRotation(cameraAngleRadians);
-    cameraMatrix = m4.translate(cameraMatrix, cameraPosX, cameraPosY, cameraPosZ);
 
-    // Make a view matrix from the camera matrix
+    var target = [0,0,1,0];
+    target = m4.vectorMultiply(target, m4.multiply(m4.yRotation(-cameraYaw), m4.xRotation(-cameraPitch)));
+    
+    forward = [target[0], target[1], target[2]];
+    // up is always [0,1,0]
+    right = m4.cross(up, forward);
+
+    // this will remove the 4th coordinate of target
+    target = m4.vectorAdd(target, cameraPos);
+    var cameraMatrix = m4.lookAt(cameraPos, target, up);
     var viewMatrix = m4.inverse(cameraMatrix);
 
     // Compute a view projection matrix
     var viewProjectionMatrix = m4.multiply(projectionMatrix, viewMatrix);
-
-    var matrix = viewProjectionMatrix;
+    var worldMatrix = m4.identity();
 
     // Set the matrix.
-    gl.uniformMatrix4fv(viewMatrixProjectionLocation, false, matrix);
-    gl.uniformMatrix4fv(viewMatrixLocation, false, viewMatrix);
+    gl.uniformMatrix4fv(viewMatrixProjectionLocation, false, viewProjectionMatrix);
+    gl.uniformMatrix4fv(worldMatrixLocation, false, worldMatrix);
     gl.uniform4fv(colorLocation, [0.2, 1, 0.2, 1]);
 
     gl.uniform3fv(reverseLightDirectionLocation, m4.normalize([0.5, 0.7, 1]));
@@ -233,23 +267,40 @@ async function main() {
     // Draw the geometry.
     var primitiveType = gl.TRIANGLES;
     var offset = 0;
-    // console.log("in draw", length);
     var count = 36 * mapSize / 108;
     gl.drawArrays(primitiveType, offset, count);
 
+    frameCount++;
+    sumFrameTimes += performance.now() - currentFrameTime;
+
+    if (frameCount > 100) {
+      fps = Math.round((frameCount * 1000) / sumFrameTimes);
+      sumFrameTimes = 0;
+      frameCount = 0;
+    }
+    
 
     // draw gui ###################################
 
     ImGui.SetNextWindowPos(new ImGui.ImVec2(20, 20), ImGui.Cond.FirstUseEver);
     ImGui.SetNextWindowSize(new ImGui.ImVec2(294, 140), ImGui.Cond.FirstUseEver);
-    ImGui.Begin("Debug");
+    ImGui.Begin("Debug", null, 64);
 
     try {
  
-    ImGui.Text(`X Y Z: ${cameraPosX} ${cameraPosY} ${cameraPosZ}`);
+    // camera ####
+    ImGui.Text(`X Y Z: ${cameraPos[0]} ${cameraPos[1]} ${cameraPos[2]}`);
+    ImGui.Text(`fps: ${fps}`);
     ImGui.Text(`speed: ${speeds[index]}`);
-    ImGui.Text(`map size: ${cubeCountX * cubeCountY}`);
+    ImGui.Text("zNear       ");
+    ImGui.SameLine();
+    ImGui.SliderInt("##4", (_ = zNear) => zNear = _, 1, 100);
+    ImGui.Text("zFar        ");
+    ImGui.SameLine();
+    ImGui.SliderInt("##5", (_ = zFar) => zFar = _, 2000, 10000);
 
+    // map    ####
+    ImGui.Text(`map size: ${cubeCountX * cubeCountY}`);
     ImGui.Text("cube size   ");
     ImGui.SameLine();
     ImGui.SliderInt("##1", (_ = cubeSize) => cubeSize = _, 5, 30);
@@ -280,6 +331,11 @@ async function main() {
     ImGui_Impl.RenderDrawData(ImGui.GetDrawData());
 
     // draw gui ###################################
+
+    // requestAnimationFrame(() => {
+    //   notRendering = true;
+    // })
+      window.requestAnimationFrame(drawScene);
   }
 }
 

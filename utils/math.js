@@ -20,6 +20,13 @@ var m4 = {
     ];
   },
 
+  identity: function() {
+    return [ 1,0,0,0,
+             0,1,0,0,
+             0,0,1,0,
+             0,0,0,1 ];
+  },
+
   projection: function(width, height, depth) {
     // Note: This matrix flips the Y axis so 0 is at the top.
     return [
@@ -80,6 +87,15 @@ var m4 = {
       b30 * a01 + b31 * a11 + b32 * a21 + b33 * a31,
       b30 * a02 + b31 * a12 + b32 * a22 + b33 * a32,
       b30 * a03 + b31 * a13 + b32 * a23 + b33 * a33,
+    ];
+  },
+
+  transpose: function(m) {
+    return [
+      m[0], m[4], m[8], m[12],
+      m[1], m[5], m[9], m[13],
+      m[2], m[6], m[10], m[14],
+      m[3], m[7], m[11], m[15],
     ];
   },
 
@@ -159,7 +175,11 @@ var m4 = {
 
   normalize: function(v) {
     const len = Math.sqrt(Math.pow(v[0],2)+Math.pow(v[1],2)+Math.pow(v[2],2));
-    return [v[0]/len, v[1]/len, v[2]/len];
+    if (len > 0.00001) {
+      return [v[0]/len, v[1]/len, v[2]/len];
+    } else {
+      return [0,0,0]
+    }
   },
 
   inverse: function(m) {
@@ -247,6 +267,20 @@ var m4 = {
     ];
   },
 
+  vectorAdd: function(v, u) {
+    return [v[0]+u[0], v[1]+u[1], v[2]+u[2]];
+  },
+
+  vectorSub: function(v, u) {
+    return [v[0]-u[0], v[1]-u[1], v[2]-u[2]];
+  },
+
+  cross: function(v, u) {
+    return [v[1]*u[2] - v[2]*u[1],
+            v[2]*u[0] - v[0]*u[2],
+            v[0]*u[1] - v[1]*u[0]];
+  },
+
   vectorMultiply: function(v, m) {
     var dst = [];
     for (var i = 0; i < 4; ++i) {
@@ -258,6 +292,24 @@ var m4 = {
     return dst;
   },
 
+  vecScalarMultiply: function(v, c) {
+    return [v[0]*c, v[1]*c, v[2]*c];
+  },
+
+  lookAt: function(pos, target, up) {
+    // path from camera to target
+    // camera will look at target via zAxis
+    var zAxis = this.normalize(this.vectorSub(pos, target));
+    var xAxis = this.normalize(this.cross(up, zAxis));
+    var yAxis = this.normalize(this.cross(zAxis, xAxis));
+
+    return [
+      xAxis[0],xAxis[1],xAxis[2],0,
+      yAxis[0],yAxis[1],yAxis[2],0,
+      zAxis[0],zAxis[1],zAxis[2],0,
+      pos[0],pos[1],pos[2],1
+    ]
+  },
 };
 
 export { radToDeg, degToRad, m4 };
