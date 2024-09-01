@@ -5,7 +5,6 @@ import { degToRad, m4 } from "./utils/math.js"
 
 var keys = []
 
-// var cameraAngleRadians = degToRad(0);
 var fieldOfViewRadians = degToRad(60);
 
 var cameraPos = [0,0,0];
@@ -25,21 +24,27 @@ var dx = 0;
 var dy = 0;
 
 // speeds[index]
-var speeds = [1, 5, 10, 20];
+var speeds = [1, 5, 10, 20, 50];
 var index = 0;
 // used to sample texture for perlin noise
 var sampler = new png_sampler();
 
 var cubeSize = 20;
-var cubeCountX = 10;
-var cubeCountY = 10;
-var mapSize = cubeCountX * cubeCountY;
+var cubeCountX = 100;
+var cubeCountY = 100;
+var triangleCount = 0;
+var offsetY = 0;
+// var offsetX = 0;
 
 var fps = 0;
 var sumFrameTimes = 0;
 var frameCount = 0;
 
 var terrain = [];
+var normals = [];
+var indices = [];
+var visualizationCubes = [];
+var visualizationNormals = [];
 
 async function main() {
   // Get A WebGL context
@@ -93,15 +98,18 @@ async function main() {
 
   // Create a buffer to put positions in
   var positionBuffer = gl.createBuffer();
-  // setTerrain(gl, sampler, positionBuffer);
   gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
   await setTerrain(gl, sampler);
 
+  var indexBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
+
   var normalBuffer = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
-  setNormals(gl);
+  // indices/3 is the number of vertices
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normals), gl.STATIC_DRAW);
 
-  // drawScene();
 
   document.addEventListener("keydown", (event) => {
     // console.log(event.key);
@@ -262,13 +270,23 @@ async function main() {
     gl.uniformMatrix4fv(worldMatrixLocation, false, worldMatrix);
     gl.uniform4fv(colorLocation, [0.2, 1, 0.2, 1]);
 
+
     gl.uniform3fv(reverseLightDirectionLocation, m4.normalize([0.5, 0.7, 1]));
 
     // Draw the geometry.
+    // var primitiveType = gl.TRIANGLES;
+    // var offset = 0;
+    // var count = 36 * mapSize;
+    // console.log(normals.length, terrain.length);
+    // gl.drawArrays(primitiveType, offset, count);
+
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+
     var primitiveType = gl.TRIANGLES;
+    var count = indices.length;
+    var type = gl.UNSIGNED_SHORT;
     var offset = 0;
-    var count = 36 * mapSize / 108;
-    gl.drawArrays(primitiveType, offset, count);
+    gl.drawElements(primitiveType, count, type, offset);
 
     frameCount++;
     sumFrameTimes += performance.now() - currentFrameTime;
@@ -294,26 +312,46 @@ async function main() {
     ImGui.Text(`speed: ${speeds[index]}`);
     ImGui.Text("zNear       ");
     ImGui.SameLine();
-    ImGui.SliderInt("##4", (_ = zNear) => zNear = _, 1, 100);
+    ImGui.SliderInt("##1", (_ = zNear) => zNear = _, 1, 100);
     ImGui.Text("zFar        ");
     ImGui.SameLine();
-    ImGui.SliderInt("##5", (_ = zFar) => zFar = _, 2000, 10000);
+    ImGui.SliderInt("##2", (_ = zFar) => zFar = _, 5000, 100000);
 
     // map    ####
     ImGui.Text(`map size: ${cubeCountX * cubeCountY}`);
+    ImGui.Text(`vertices:  ${(terrain.length/9).toLocaleString()}`);
+    ImGui.Text(`triangles: ${triangleCount.toLocaleString()}`);
     ImGui.Text("cube size   ");
     ImGui.SameLine();
-    ImGui.SliderInt("##1", (_ = cubeSize) => cubeSize = _, 5, 30);
+    ImGui.SliderInt("##3", (_ = cubeSize) => cubeSize = _, 5, 30);
 
     ImGui.Text("cube count X");
     ImGui.SameLine();
-    ImGui.SliderInt("##2", (_ = cubeCountX) => cubeCountX = _, 20, 100);
+    // returns a bool
+    let Xchanged = ImGui.SliderInt("##4", (_ = cubeCountX) => cubeCountX = _, 1, sampler.width);
 
     ImGui.Text("cube count Y");
     ImGui.SameLine();
-    ImGui.SliderInt("##3", (_ = cubeCountY) => cubeCountY = _, 20, 100);
+    let yChanged = ImGui.SliderInt("##5", (_ = cubeCountY) => cubeCountY = _, 1, sampler.height);
+
+    ImGui.Text("offset Y    ");
+    ImGui.SameLine();
+    let offsetChanged = ImGui.SliderInt("##6", (_ = offsetY) => offsetY = _, 0, 100);
 
     ImGui.ColorEdit4("clear color", clear_color);
+
+
+    if (Xchanged || yChanged || offsetChanged) {
+
+      // var positionBuffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+      // dont need to await, sampler is already initialized
+      setTerrain(gl, sampler);
+
+      // var normalBuffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normals), gl.STATIC_DRAW);
+    }
 
     } catch (e) {
       ImGui.TextColored(new ImGui.ImVec4(1.0,0.0,0.0,1.0), "error: ");
@@ -332,93 +370,136 @@ async function main() {
 
     // draw gui ###################################
 
-    // requestAnimationFrame(() => {
-    //   notRendering = true;
-    // })
       window.requestAnimationFrame(drawScene);
   }
 }
 
-function setCube(x, y, z) {
+
+function backFace(x, y, z, offset) {
+
+  indices.push.apply(indices, [0,1,2,0,2,3].map(o => o+offset));
+  normals.push.apply(normals, [
+    0,0,-1,
+    0,0,-1,
+    0,0,-1,
+    0,0,-1,
+  ]);
 
   return [
-    // back face
-    x,       y+cubeSize,  z,
+    x+cubeSize, y+cubeSize,  z,
     x+cubeSize,  y,       z,
     x,       y,       z,
-
-    x,       y+cubeSize,  z,
-    x+cubeSize,  y+cubeSize,  z,
-    x+cubeSize,  y,       z,
-
-    // front face
-    x,       y+cubeSize,  z+cubeSize,
-    x,       y,       z+cubeSize,
-    x+cubeSize,  y,       z+cubeSize,
-
-    x,       y+cubeSize,  z+cubeSize,
-    x+cubeSize,  y,       z+cubeSize,
-    x+cubeSize,  y+cubeSize,  z+cubeSize,
-
-    // Left face
-    x,       y,       z,
-    x,       y,       z+cubeSize,
-    x,       y+cubeSize,  z,
-
-    x,       y,       z+cubeSize,
-    x,       y+cubeSize,  z+cubeSize,
-    x,       y+cubeSize,  z,
-
-    // Right face
-    x+cubeSize,  y,       z,
-    x+cubeSize,  y+cubeSize,  z,
-    x+cubeSize,  y,       z+cubeSize,
-
-    x+cubeSize,  y,       z+cubeSize,
-    x+cubeSize,  y+cubeSize,  z,
-    x+cubeSize,  y+cubeSize,  z+cubeSize,
-
-    // Top face
-    x,       y+cubeSize,  z,
-    x,       y+cubeSize,  z+cubeSize,
-    x+cubeSize,  y+cubeSize,  z,
-
-    x+cubeSize,  y+cubeSize,  z,
-    x,       y+cubeSize,  z+cubeSize,
-    x+cubeSize,  y+cubeSize,  z+cubeSize,
-
-    // Bottom face
-    x,       y,       z,
-    x+cubeSize,  y,       z,
-    x,       y,       z+cubeSize,
-
-    x+cubeSize,  y,       z,
-    x+cubeSize,  y,       z+cubeSize,
-    x,       y,       z+cubeSize
-  ];
+    x,  y+cubeSize,  z,
+  ]
 }
 
-function setNormals(gl) {
-  var normals = [
-    // front
-    0,0,1,
-    0,0,1,
-    0,0,1,
-    0,0,1,
-    0,0,1,
-    0,0,1,
+function frontFace(x, y, z, offset) {
 
+  indices.push.apply(indices, [0,1,2,0,2,3].map(o => o+offset));
+  normals.push.apply(normals, [
+    0,0,1,
+    0,0,1,
+    0,0,1,
+    0,0,1,
+  ]);
+
+  return [
+    x,       y+cubeSize,  z+cubeSize,
+    x,       y,       z+cubeSize,
+    x+cubeSize,  y,       z+cubeSize,
+    x+cubeSize,  y+cubeSize,  z+cubeSize,
+  ]
+}
+
+function leftFace(x, y, z, offset) {
+
+  indices.push.apply(indices, [0,1,2,1,3,2].map(o => o+offset));
+  normals.push.apply(normals, [
+    -1,0,0,
+    -1,0,0,
+    -1,0,0,
+    -1,0,0
+  ]);
+
+  return [
+    x,       y,       z,
+    x,       y,       z+cubeSize,
+    x,       y+cubeSize,  z,
+    x,       y+cubeSize,  z+cubeSize,
+  ]
+}
+
+function rightFace(x, y, z, offset) {
+
+  indices.push.apply(indices, [0,1,2,1,3,2].map(o => o+offset));
+  normals.push.apply(normals, [
+    1,0,0,
+    1,0,0,
+    1,0,0,
+    1,0,0
+  ]);
+
+  return [
+    x+cubeSize,  y,       z,
+    x+cubeSize,  y+cubeSize,  z,
+    x+cubeSize,  y,       z+cubeSize,
+    x+cubeSize,  y+cubeSize,  z+cubeSize,
+  ]
+}
+
+function topFace(x, y, z, offset) {
+
+  indices.push.apply(indices, [0,1,2,1,3,2].map(o => o+offset));
+  normals.push.apply(normals, [
+    0,1,0,
+    0,1,0,
+    0,1,0,
+    0,1,0
+  ]);
+
+  return [
+    x,       y+cubeSize,  z,
+    x,       y+cubeSize,  z+cubeSize,
+    x+cubeSize,  y+cubeSize,  z,
+    x+cubeSize,  y+cubeSize,  z+cubeSize,
+  ]
+}
+
+function bottomFace(x, y, z, offset) {
+
+  indices.push.apply(indices, [0,1,2,1,3,2].map(o => o+offset));
+  normals.push.apply(normals, [
+    0,-1,0,
+    0,-1,0,
+    0,-1,0,
+    0,-1,0,
+  ]);
+
+  return [
+    x,       y,       z,
+    x+cubeSize,  y,       z,
+    x,       y,       z+cubeSize,
+    x+cubeSize,  y,       z+cubeSize,
+  ]
+}
+
+function setCube(x, y, z, offset) {
+
+  normals.push.apply(normals, [
+    
     // back
     0,0,-1,
     0,0,-1,
     0,0,-1,
     0,0,-1,
-    0,0,-1,
-    0,0,-1,
 
-      // left
-    -1,0,0,
-    -1,0,0,
+    // front
+    0,0,1,
+    0,0,1,
+    0,0,1,
+    0,0,1,
+
+    // left
     -1,0,0,
     -1,0,0,
     -1,0,0,
@@ -429,12 +510,8 @@ function setNormals(gl) {
     1,0,0,
     1,0,0,
     1,0,0,
-    1,0,0,
-    1,0,0,
 
        // top
-    0,1,0,
-    0,1,0,
     0,1,0,
     0,1,0,
     0,1,0,
@@ -444,72 +521,202 @@ function setNormals(gl) {
     0,-1,0,
     0,-1,0,
     0,-1,0,
-    0,-1,0,
-    0,-1,0,
-    0,-1,0];
+    0,-1,0 ]);
 
-  var l = mapSize/108;
-  var dst = [];
-  // let dst = new Float32Array(length);
+  indices.push.apply(indices, [0,1,2,0,2,3,  4,5,6,4,6,7,  8,9,10,9,11,10,  12,13,14,13,15,14,  16,17,18,17,19,18,  20,21,22,21,23,22].map(o => o+offset));
+  // indices.push.apply(indices, [0,1,2,0,2,3,  4,5,6,4,6,7,  2,5,8,5,4,8,  1,9,6,9,7,6,  8,4,9,4,7,9,  2,1,5,1,6,5].map(o => o+offset));
 
-  for (let i=0; i<l; i++) {
-    // dst.set(normals, i);
-    dst.push.apply(dst, normals);
-  }
-  // dst.push(1);
-  // console.log("in normals", dst.length);
-  // console.log(dst);
+  return [
 
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(dst), gl.STATIC_DRAW);
+    x+cubeSize, y+cubeSize,  z,
+    x+cubeSize,  y,       z,
+    x,       y,       z,
+    x,  y+cubeSize,  z,
+
+    x,       y+cubeSize,  z+cubeSize,
+    x,       y,       z+cubeSize,
+    x+cubeSize,  y,       z+cubeSize,
+    x+cubeSize,  y+cubeSize,  z+cubeSize,
+
+    x,       y,       z,
+    x,       y,       z+cubeSize,
+    x,       y+cubeSize,  z,
+    x,       y+cubeSize,  z+cubeSize,
+
+    x+cubeSize,  y,       z,
+    x+cubeSize,  y+cubeSize,  z,
+    x+cubeSize,  y,       z+cubeSize,
+    x+cubeSize,  y+cubeSize,  z+cubeSize,
+
+    x,       y+cubeSize,  z,
+    x,       y+cubeSize,  z+cubeSize,
+    x+cubeSize,  y+cubeSize,  z,
+    x+cubeSize,  y+cubeSize,  z+cubeSize,
+
+    x,       y,       z,
+    x+cubeSize,  y,       z,
+    x,       y,       z+cubeSize,
+    x+cubeSize,  y,       z+cubeSize,
+  ]
 }
 
 async function setTerrain(gl, sampler) {
 
-  await sampler.init_sampler("./resources/perlin_noise.png");
+  if (sampler.pixels == null) {
+    await sampler.init_sampler("./resources/perlin_noise.png");
+  }
 
-  // var terrain = [];
   var percentage = 0;
+  var terrainA = [];
+  normals = [];
+  indices = [];
 
   for (let i=0; i < cubeCountX; i++) {
     for (let j=0; j < cubeCountY; j++) {
-
-      var pixel = sampler.sample_pixel(i,j,0,1);
-      terrain.push.apply(terrain, setCube(i*cubeSize, pixel[0]*cubeSize, j*cubeSize));
+      // holds values from 0 to 255
+      var pixel = sampler.sample_pixel(i,offsetY+j,0,1);
+      terrainA.push.apply(terrainA, setCube(j*cubeSize, pixel[0]*cubeSize, i*cubeSize, terrainA.length/3));
     }
   }
 
+  indices = [];
+  normals = [];
+  var terrainB = [];
+  visualizationCubes = [];
+
   for (let i=0; i < cubeCountX; i++) {
     for (let j=0; j < cubeCountY; j++) {
 
-      var pixel = sampler.sample_pixel(i,j,0,1);
-      var height = pixel[0]*cubeSize;
-      var heightU = height;
-      var heightD = height;
+      // get height of cube
+      var height = terrainA[i*cubeCountY*72 + j*72 + 4];
+      // var height = 0 ;
+      var heightF = height;
+      var heightB = height;
       var heightL = height;
       var heightR = height;
 
-      if (i > 0) { heightU = terrain[(i-1)*cubeCountX + j] }
-      if (j > 0) { heightD = terrain[(i+1)*cubeCountX + j] }
-      if (i < cubeCountX-1) { heightL = terrain[i*cubeCountX + j-1] }
-      if (j < cubeCountY-1) { heightR = terrain[i*cubeCountX + j+1] }
+      var AddfrontFace = true;
+      var AddbackFace = true;
+      var AddleftFace = true;
+      var AddrightFace = true;
 
-      var diff = (height - Math.min(heightU, heightD, heightL, heightR)) / cubeSize;
+      if (j > 0)            { heightF = terrainA[(i-1)*cubeCountY*72 + j*72 + 4]; if (heightF == height) AddbackFace = false }
+      if (j < cubeCountY-1) { heightB = terrainA[(i+1)*cubeCountY*72 + j*72 + 4]; if (heightB == height) AddfrontFace = false }
+      if (i > 0)            { heightL = terrainA[i*cubeCountY*72 + (j-1)*72 + 4]; if (heightL == height) AddrightFace = false }
+      if (i < cubeCountX-1) { heightR = terrainA[i*cubeCountY*72 + (j+1)*72 + 4]; if (heightR == height) AddleftFace = false }
 
-      terrain.push.apply(terrain, setCube(i*cubeSize, height, j*cubeSize));
+      var diff = (height - Math.min(heightF, heightB, heightL, heightR)) / cubeSize;
+      // terrainB.push.apply(terrainB, setCube(i*cubeSize, height, j*cubeSize, terrainB.length/3));
+      terrainB.push.apply(terrainB, topFace (i*cubeSize, height, j*cubeSize, terrainB.length/3));
+      terrainB.push.apply(terrainB, bottomFace(i*cubeSize, height, j*cubeSize, terrainB.length/3));
+      if (AddrightFace == true) terrainB.push.apply(terrainB, rightFace (i*cubeSize, height, j*cubeSize, terrainB.length/3));
+      if (AddleftFace  == true) terrainB.push.apply(terrainB, leftFace  (i*cubeSize, height, j*cubeSize, terrainB.length/3));
+      if (AddfrontFace == true) terrainB.push.apply(terrainB, frontFace (i*cubeSize, height, j*cubeSize, terrainB.length/3));
+      if (AddbackFace  == true) terrainB.push.apply(terrainB, backFace  (i*cubeSize, height, j*cubeSize, terrainB.length/3));
 
-      for (let k=0; k < diff; k++) {
-        terrain.push.apply(terrain, setCube(i*cubeSize, (height/cubeSize-k)*cubeSize, j*cubeSize));
+      for (let k=0; k < diff-1; k++) {
+        // terrainB.push.apply(terrainB, setCube(i*cubeSize, (height/cubeSize-k)*cubeSize, j*cubeSize));
+        terrainB.push.apply(terrainB, topFace(i*cubeSize,    (height/cubeSize-k)*cubeSize, j*cubeSize, terrainB.length/3));
+        terrainB.push.apply(terrainB, rightFace(i*cubeSize,  (height/cubeSize-k)*cubeSize, j*cubeSize, terrainB.length/3));
+        terrainB.push.apply(terrainB, leftFace(i*cubeSize,   (height/cubeSize-k)*cubeSize, j*cubeSize, terrainB.length/3));
+        terrainB.push.apply(terrainB, frontFace(i*cubeSize,  (height/cubeSize-k)*cubeSize, j*cubeSize, terrainB.length/3));
+        terrainB.push.apply(terrainB, backFace(i*cubeSize,   (height/cubeSize-k)*cubeSize, j*cubeSize, terrainB.length/3));
+      }
+      if (diff > 0) { 
+        terrainB.push.apply(terrainB, bottomFace(i*cubeSize, (height/cubeSize-diff+1)*cubeSize, j*cubeSize, terrainB.length/3));
+        terrainB.push.apply(terrainB, rightFace(i*cubeSize,  (height/cubeSize-diff+1)*cubeSize, j*cubeSize, terrainB.length/3));
+        terrainB.push.apply(terrainB, leftFace(i*cubeSize,   (height/cubeSize-diff+1)*cubeSize, j*cubeSize, terrainB.length/3));
+        terrainB.push.apply(terrainB, frontFace(i*cubeSize,  (height/cubeSize-diff+1)*cubeSize, j*cubeSize, terrainB.length/3));
+        terrainB.push.apply(terrainB, backFace(i*cubeSize,   (height/cubeSize-diff+1)*cubeSize, j*cubeSize, terrainB.length/3));
       }
     }
-    console.log("generating terrain", percentage++, "/", cubeCountX);
+    // console.log("generating terrain", percentage++, "/", cubeCountX);
   }
 
-  mapSize = terrain.length;
-  // console.log("in terrain gen", length);
-  // console.log(terrain.length / length);
+  terrain = terrainB;
+  triangleCount = indices.length/3;
+
   // we cant optimize by initializing the arr beforehand, becaues we dont know diffs
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(terrain), gl.STATIC_DRAW);
   console.log("terrain generated");
 }
+
+// async function setTerrain2(gl, sampler) {
+
+//   if (sampler.pixels == null) {
+//     await sampler.init_sampler("./resources/perlin_noise.png");
+//   }
+
+//   var percentage = 0;
+//   var terrainA = [];
+//   normals = [];
+//   for (let i=0; i < cubeCountX; i++) {
+//     for (let j=0; j < cubeCountY; j++) {
+//       // holds values from 0 to 255
+//       var pixel = sampler.sample_pixel(i,offsetY+j,0,1);
+//       terrainA.push.apply(terrainA, setCube(j*cubeSize, pixel[0]*cubeSize, i*cubeSize));
+//     }
+//   }
+
+//   normals = [];
+//   terrain = [];
+//   var terrainB = [];
+//   visualizationCubes = [];
+
+//   for (let i=0; i < cubeCountX; i++) {
+//     for (let j=0; j < cubeCountY; j++) {
+
+//       // get height of cube
+//       var height = terrainA[i*cubeCountY*108 + j*108 + 4];
+//       var heightF = height;
+//       var heightB = height;
+//       var heightL = height;
+//       var heightR = height;
+
+//       var AddfrontFace = true;
+//       var AddbackFace = true;
+//       var AddleftFace = true;
+//       var AddrightFace = true;
+
+//       if (j > 0)            { heightF = terrainA[(i-1)*cubeCountY*108 + j*108 + 4]; if (heightF == height) AddbackFace = false }
+//       if (j < cubeCountY-1) { heightB = terrainA[(i+1)*cubeCountY*108 + j*108 + 4]; if (heightB == height) AddfrontFace = false }
+//       if (i > 0)            { heightL = terrainA[i*cubeCountY*108 + (j-1)*108 + 4]; if (heightL == height) AddrightFace = false }
+//       if (i < cubeCountX-1) { heightR = terrainA[i*cubeCountY*108 + (j+1)*108 + 4]; if (heightR == height) AddleftFace = false }
+
+//       var diff = (height - Math.min(heightF, heightB, heightL, heightR)) / cubeSize;
+//       // terrainB.push.apply(terrainB, setCube(i*cubeSize, height, j*cubeSize));
+//       // terrainB.push.apply(terrainB, topFace   (i*cubeSize, height, j*cubeSize));
+//       // terrainB.push.apply(terrainB, bottomFace(i*cubeSize, height, j*cubeSize));
+//       // if (AddrightFace == true) terrainB.push.apply(terrainB, rightFace (i*cubeSize, height, j*cubeSize));
+//       // if (AddleftFace == true)  terrainB.push.apply(terrainB, leftFace  (i*cubeSize, height, j*cubeSize));
+//       if (AddfrontFace == true) terrainB.push.apply(terrainB, frontFace(i*cubeSize, height, j*cubeSize));
+//       // if (AddbackFace == true)  terrainB.push.apply(terrainB, backFace  (i*cubeSize, height, j*cubeSize));
+
+//       for (let k=0; k < diff-1; k++) {
+//         // terrainB.push.apply(terrainB, setCube(i*cubeSize, (height/cubeSize-k)*cubeSize, j*cubeSize));
+//         terrainB.push.apply(terrainB, topFace(i*cubeSize,     (height/cubeSize-k)*cubeSize, j*cubeSize));
+//         terrainB.push.apply(terrainB, rightFace(i*cubeSize,   (height/cubeSize-k)*cubeSize, j*cubeSize));
+//         terrainB.push.apply(terrainB, leftFace(i*cubeSize,    (height/cubeSize-k)*cubeSize, j*cubeSize));
+//         terrainB.push.apply(terrainB, frontFace(i*cubeSize,   (height/cubeSize-k)*cubeSize, j*cubeSize));
+//         terrainB.push.apply(terrainB, backFace(i*cubeSize,    (height/cubeSize-k)*cubeSize, j*cubeSize));
+//       }
+//       if (diff > 0) { 
+//         terrainB.push.apply(terrainB, bottomFace(i*cubeSize,   (height/cubeSize-diff+1)*cubeSize, j*cubeSize));
+//         terrainB.push.apply(terrainB, rightFace(i*cubeSize,    (height/cubeSize-diff+1)*cubeSize, j*cubeSize));
+//         terrainB.push.apply(terrainB, leftFace(i*cubeSize,     (height/cubeSize-diff+1)*cubeSize, j*cubeSize));
+//         terrainB.push.apply(terrainB, frontFace(i*cubeSize,    (height/cubeSize-diff+1)*cubeSize, j*cubeSize));
+//         terrainB.push.apply(terrainB, backFace(i*cubeSize,     (height/cubeSize-diff+1)*cubeSize, j*cubeSize));
+//       }
+//     }
+//     // console.log("generating terrain", percentage++, "/", cubeCountX);
+//   }
+
+//   terrain = terrainB;
+//   triangleCount = terrain.length/3;
+
+//   // we cant optimize by initializing the arr beforehand, becaues we dont know diffs
+//   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(terrain), gl.STATIC_DRAW);
+//   console.log("terrain generated");
+// }
 
 main();
