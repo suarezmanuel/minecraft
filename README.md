@@ -6,3 +6,5 @@ wouldve done it only with 2d canvas rendering context but it is too slow
 because fillRectangle is not optimized for this type of stuff.
 
 ![](./resources/image.png)
+
+![](./resources/image2.png)
