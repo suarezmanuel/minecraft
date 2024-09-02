@@ -309,15 +309,26 @@ async function main() {
     ImGui.Begin("Debug", null, 64);
 
 
-    let Xchanged = false;
-    let Ychanged = false;
-    let offsetChanged = false;
+    let valueChanged = false;
+
     try {
  
       // camera ####
       ImGui.Text(`X Y Z: ${cameraPos[0]} ${cameraPos[1]} ${cameraPos[2]}`);
       ImGui.Text(`fps: ${fps}`);
       ImGui.Text(`speed: ${speeds[index]}`);
+
+      ImGui.Separator();
+      // map    ####
+      ImGui.Text(`map size:  ${cubeCountX * cubeCountY}`);
+      ImGui.Text(`vertices:  ${(2*indices.length/3).toLocaleString()}`);
+      ImGui.Text(`indices:   ${(indices.length).toLocaleString()}`);
+      ImGui.SameLine();
+      ImGui.Text(` ${(indices.length/(2**31-1))}% full`);
+      ImGui.Text(`triangles: ${triangleCount.toLocaleString()}`);
+
+      ImGui.Separator();
+
       ImGui.Text("zNear       ");
       ImGui.SameLine();
       ImGui.SliderInt("##1", (_ = zNear) => zNear = _, 1, 100);
@@ -325,27 +336,26 @@ async function main() {
       ImGui.SameLine();
       ImGui.SliderInt("##2", (_ = zFar) => zFar = _, 5000, 100000);
 
-      // map    ####
-      ImGui.Text(`map size:  ${cubeCountX * cubeCountY}`);
-      ImGui.Text(`vertices:  ${(2*indices.length/3).toLocaleString()}`);
-      ImGui.Text(`indices:   ${(indices.length).toLocaleString()}`);
-      ImGui.Text(`triangles: ${triangleCount.toLocaleString()}`);
+      ImGui.Separator();
+
       ImGui.Text("cube size:  ");
       ImGui.SameLine();
-      ImGui.SliderInt("##3", (_ = cubeSize) => cubeSize = _, 5, 30);
+      valueChanged |= ImGui.SliderInt("##3", (_ = cubeSize) => cubeSize = _, 5, 30);
 
       ImGui.Text("cube count X");
       ImGui.SameLine();
       // returns a bool
-      Xchanged = ImGui.SliderInt("##4", (_ = cubeCountX) => cubeCountX = _, 1, sampler.width);
+      valueChanged |= ImGui.SliderInt("##4", (_ = cubeCountX) => cubeCountX = _, 1, sampler.width);
 
       ImGui.Text("cube count Y");
       ImGui.SameLine();
-      Ychanged = ImGui.SliderInt("##5", (_ = cubeCountY) => cubeCountY = _, 1, sampler.height);
+      valueChanged |= ImGui.SliderInt("##5", (_ = cubeCountY) => cubeCountY = _, 1, sampler.height);
 
       ImGui.Text("offset Y    ");
       ImGui.SameLine();
-      offsetChanged = ImGui.SliderInt("##6", (_ = offsetY) => offsetY = _, 0, 100);
+      valueChanged |= ImGui.SliderInt("##6", (_ = offsetY) => offsetY = _, 0, 100);
+
+      ImGui.Separator();
 
       ImGui.ColorEdit4("clear color", clear_color);
 
@@ -367,7 +377,7 @@ async function main() {
     // draw gui ###################################
 
 
-    if (Xchanged || Ychanged || offsetChanged) {
+    if (valueChanged) {
 
       // var positionBuffer = gl.createBuffer();
       gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
