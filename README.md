@@ -7,4 +7,4 @@ because fillRectangle is not optimized for this type of stuff.
 
 ![](./resources/image.png)
 
-![](./resources/image2.png)
+![](./resources/image3.png)
