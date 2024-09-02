@@ -30,8 +30,8 @@ var index = 0;
 var sampler = new png_sampler();
 
 var cubeSize = 20;
-var cubeCountX = 100;
-var cubeCountY = 100;
+var cubeCountX = 16;
+var cubeCountY = 16;
 var triangleCount = 0;
 var offsetY = 0;
 // var offsetX = 0;
@@ -55,6 +55,10 @@ async function main() {
   if (!gl) {
     return;
   }
+
+  gl.getExtension("OES_element_index_uint");
+
+  // console.log(gl.getSupportedExtensions());
 
   // const canvas = document.getElementById("canvas");
   const devicePixelRatio = window.devicePixelRatio || 1;
@@ -103,7 +107,7 @@ async function main() {
 
   var indexBuffer = gl.createBuffer();
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(indices), gl.STATIC_DRAW);
 
   var normalBuffer = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
@@ -189,7 +193,7 @@ async function main() {
   function drawScene() {
 
     let currentFrameTime = performance.now();
-
+    // gl.getExtension();
     webglUtils.resizeCanvasToDisplaySize(gl.canvas);
 
     const glGUI = ImGui_Impl.gl;
@@ -284,7 +288,7 @@ async function main() {
 
     var primitiveType = gl.TRIANGLES;
     var count = indices.length;
-    var type = gl.UNSIGNED_SHORT;
+    var type = gl.UNSIGNED_INT;
     var offset = 0;
     gl.drawElements(primitiveType, count, type, offset);
 
@@ -304,54 +308,46 @@ async function main() {
     ImGui.SetNextWindowSize(new ImGui.ImVec2(294, 140), ImGui.Cond.FirstUseEver);
     ImGui.Begin("Debug", null, 64);
 
+
+    let Xchanged = false;
+    let Ychanged = false;
+    let offsetChanged = false;
     try {
  
-    // camera ####
-    ImGui.Text(`X Y Z: ${cameraPos[0]} ${cameraPos[1]} ${cameraPos[2]}`);
-    ImGui.Text(`fps: ${fps}`);
-    ImGui.Text(`speed: ${speeds[index]}`);
-    ImGui.Text("zNear       ");
-    ImGui.SameLine();
-    ImGui.SliderInt("##1", (_ = zNear) => zNear = _, 1, 100);
-    ImGui.Text("zFar        ");
-    ImGui.SameLine();
-    ImGui.SliderInt("##2", (_ = zFar) => zFar = _, 5000, 100000);
+      // camera ####
+      ImGui.Text(`X Y Z: ${cameraPos[0]} ${cameraPos[1]} ${cameraPos[2]}`);
+      ImGui.Text(`fps: ${fps}`);
+      ImGui.Text(`speed: ${speeds[index]}`);
+      ImGui.Text("zNear       ");
+      ImGui.SameLine();
+      ImGui.SliderInt("##1", (_ = zNear) => zNear = _, 1, 100);
+      ImGui.Text("zFar        ");
+      ImGui.SameLine();
+      ImGui.SliderInt("##2", (_ = zFar) => zFar = _, 5000, 100000);
 
-    // map    ####
-    ImGui.Text(`map size: ${cubeCountX * cubeCountY}`);
-    ImGui.Text(`vertices:  ${(terrain.length/9).toLocaleString()}`);
-    ImGui.Text(`triangles: ${triangleCount.toLocaleString()}`);
-    ImGui.Text("cube size   ");
-    ImGui.SameLine();
-    ImGui.SliderInt("##3", (_ = cubeSize) => cubeSize = _, 5, 30);
+      // map    ####
+      ImGui.Text(`map size:  ${cubeCountX * cubeCountY}`);
+      ImGui.Text(`vertices:  ${(2*indices.length/3).toLocaleString()}`);
+      ImGui.Text(`indices:   ${(indices.length).toLocaleString()}`);
+      ImGui.Text(`triangles: ${triangleCount.toLocaleString()}`);
+      ImGui.Text("cube size:  ");
+      ImGui.SameLine();
+      ImGui.SliderInt("##3", (_ = cubeSize) => cubeSize = _, 5, 30);
 
-    ImGui.Text("cube count X");
-    ImGui.SameLine();
-    // returns a bool
-    let Xchanged = ImGui.SliderInt("##4", (_ = cubeCountX) => cubeCountX = _, 1, sampler.width);
+      ImGui.Text("cube count X");
+      ImGui.SameLine();
+      // returns a bool
+      Xchanged = ImGui.SliderInt("##4", (_ = cubeCountX) => cubeCountX = _, 1, sampler.width);
 
-    ImGui.Text("cube count Y");
-    ImGui.SameLine();
-    let yChanged = ImGui.SliderInt("##5", (_ = cubeCountY) => cubeCountY = _, 1, sampler.height);
+      ImGui.Text("cube count Y");
+      ImGui.SameLine();
+      Ychanged = ImGui.SliderInt("##5", (_ = cubeCountY) => cubeCountY = _, 1, sampler.height);
 
-    ImGui.Text("offset Y    ");
-    ImGui.SameLine();
-    let offsetChanged = ImGui.SliderInt("##6", (_ = offsetY) => offsetY = _, 0, 100);
+      ImGui.Text("offset Y    ");
+      ImGui.SameLine();
+      offsetChanged = ImGui.SliderInt("##6", (_ = offsetY) => offsetY = _, 0, 100);
 
-    ImGui.ColorEdit4("clear color", clear_color);
-
-
-    if (Xchanged || yChanged || offsetChanged) {
-
-      // var positionBuffer = gl.createBuffer();
-      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-      // dont need to await, sampler is already initialized
-      setTerrain(gl, sampler);
-
-      // var normalBuffer = gl.createBuffer();
-      gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
-      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normals), gl.STATIC_DRAW);
-    }
+      ImGui.ColorEdit4("clear color", clear_color);
 
     } catch (e) {
       ImGui.TextColored(new ImGui.ImVec4(1.0,0.0,0.0,1.0), "error: ");
@@ -370,7 +366,24 @@ async function main() {
 
     // draw gui ###################################
 
-      window.requestAnimationFrame(drawScene);
+
+    if (Xchanged || Ychanged || offsetChanged) {
+
+      // var positionBuffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+      // dont need to await, sampler is already initialized
+      setTerrain(gl, sampler);
+      // count = indices.length;
+
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(indices), gl.STATIC_DRAW);
+
+      // var normalBuffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normals), gl.STATIC_DRAW);
+    }
+
+    window.requestAnimationFrame(drawScene);
   }
 }
 
@@ -529,34 +542,34 @@ function setCube(x, y, z, offset) {
   return [
 
     x+cubeSize, y+cubeSize,  z,
-    x+cubeSize,  y,       z,
-    x,       y,       z,
-    x,  y+cubeSize,  z,
+    x+cubeSize, y,           z,
+    x,          y,           z,
+    x,          y+cubeSize,  z,
 
-    x,       y+cubeSize,  z+cubeSize,
-    x,       y,       z+cubeSize,
-    x+cubeSize,  y,       z+cubeSize,
-    x+cubeSize,  y+cubeSize,  z+cubeSize,
+    x,          y+cubeSize,  z+cubeSize,
+    x,          y,           z+cubeSize,
+    x+cubeSize, y,           z+cubeSize,
+    x+cubeSize, y+cubeSize,  z+cubeSize,
 
-    x,       y,       z,
-    x,       y,       z+cubeSize,
-    x,       y+cubeSize,  z,
-    x,       y+cubeSize,  z+cubeSize,
+    x,       y,              z,
+    x,       y,              z+cubeSize,
+    x,       y+cubeSize,     z,
+    x,       y+cubeSize,     z+cubeSize,
 
-    x+cubeSize,  y,       z,
-    x+cubeSize,  y+cubeSize,  z,
-    x+cubeSize,  y,       z+cubeSize,
-    x+cubeSize,  y+cubeSize,  z+cubeSize,
+    x+cubeSize,  y,          z,
+    x+cubeSize,  y+cubeSize, z,
+    x+cubeSize,  y,          z+cubeSize,
+    x+cubeSize,  y+cubeSize, z+cubeSize,
 
-    x,       y+cubeSize,  z,
-    x,       y+cubeSize,  z+cubeSize,
-    x+cubeSize,  y+cubeSize,  z,
-    x+cubeSize,  y+cubeSize,  z+cubeSize,
+    x,           y+cubeSize, z,
+    x,           y+cubeSize, z+cubeSize,
+    x+cubeSize,  y+cubeSize, z,
+    x+cubeSize,  y+cubeSize, z+cubeSize,
 
-    x,       y,       z,
-    x+cubeSize,  y,       z,
-    x,       y,       z+cubeSize,
-    x+cubeSize,  y,       z+cubeSize,
+    x,           y,          z,
+    x+cubeSize,  y,          z,
+    x,           y,          z+cubeSize,
+    x+cubeSize,  y,          z+cubeSize,
   ]
 }
 
@@ -600,14 +613,14 @@ async function setTerrain(gl, sampler) {
       var AddleftFace = true;
       var AddrightFace = true;
 
-      if (j > 0)            { heightF = terrainA[(i-1)*cubeCountY*72 + j*72 + 4]; if (heightF == height) AddbackFace = false }
+      if (j > 0)            { heightF = terrainA[(i-1)*cubeCountY*72 + j*72 + 4]; if (heightF == height) AddbackFace = false  }
       if (j < cubeCountY-1) { heightB = terrainA[(i+1)*cubeCountY*72 + j*72 + 4]; if (heightB == height) AddfrontFace = false }
       if (i > 0)            { heightL = terrainA[i*cubeCountY*72 + (j-1)*72 + 4]; if (heightL == height) AddrightFace = false }
-      if (i < cubeCountX-1) { heightR = terrainA[i*cubeCountY*72 + (j+1)*72 + 4]; if (heightR == height) AddleftFace = false }
+      if (i < cubeCountX-1) { heightR = terrainA[i*cubeCountY*72 + (j+1)*72 + 4]; if (heightR == height) AddleftFace = false  }
 
       var diff = (height - Math.min(heightF, heightB, heightL, heightR)) / cubeSize;
       // terrainB.push.apply(terrainB, setCube(i*cubeSize, height, j*cubeSize, terrainB.length/3));
-      terrainB.push.apply(terrainB, topFace (i*cubeSize, height, j*cubeSize, terrainB.length/3));
+      terrainB.push.apply(terrainB, topFace   (i*cubeSize, height, j*cubeSize, terrainB.length/3));
       terrainB.push.apply(terrainB, bottomFace(i*cubeSize, height, j*cubeSize, terrainB.length/3));
       if (AddrightFace == true) terrainB.push.apply(terrainB, rightFace (i*cubeSize, height, j*cubeSize, terrainB.length/3));
       if (AddleftFace  == true) terrainB.push.apply(terrainB, leftFace  (i*cubeSize, height, j*cubeSize, terrainB.length/3));
