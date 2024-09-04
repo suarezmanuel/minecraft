@@ -20,38 +20,6 @@
 <script src="https://flyover.github.io/imgui-js/dist/imgui_impl.umd.js"></script>
 <script src="./gui.js"></script>
 
-<script id="vertex-shader-3d" type="notjs">
-    attribute vec4 a_position;
-    attribute vec3 a_normal;
-
-    uniform mat4 u_worldMatrix;
-    uniform mat4 u_viewMatrixProjection;
-    varying vec3 v_normal;
-
-    void main() {
-        gl_Position = u_viewMatrixProjection * a_position;
-        v_normal = a_normal * mat3(u_worldMatrix);
-    }
-</script>
-    
-<script id="fragment-shader-3d" type="notjs">
-    precision mediump float;
-
-    uniform vec3 u_reverseLightDirection;
-    uniform vec4 u_color;
-    varying vec3 v_normal;
-
-    void main() {
-
-        vec3 normal = normalize(v_normal);
-
-        // light in [0,1]
-        float light = dot(normal, u_reverseLightDirection);
-        gl_FragColor = u_color;
-
-        gl_FragColor.rgb *= light;
-    }
-</script>
 <canvas id="canvas"></canvas>
 <div id="uiContainer">
   <div id="ui">

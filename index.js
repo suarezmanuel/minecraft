@@ -1,9 +1,13 @@
 import { png_sampler } from "./utils/png.js"
 import { degToRad, m4 } from "./utils/math.js"
+import { createProgramFromFiles } from "./utils/shaderLoader.js"
+import { backFace, frontFace, leftFace, rightFace, topFace, bottomFace, setCube } from "./utils/geometry.js"
+
 
 "use strict";
 
 var keys = []
+var showChunks = false;
 
 var fieldOfViewRadians = degToRad(60);
 
@@ -33,8 +37,6 @@ var cubeSize = 20;
 var cubeCountX = 16;
 var cubeCountY = 16;
 var triangleCount = 0;
-var offsetY = 0;
-// var offsetX = 0;
 
 var fps = 0;
 var sumFrameTimes = 0;
@@ -43,13 +45,32 @@ var frameCount = 0;
 var terrain = [];
 var normals = [];
 var indices = [];
-var visualizationCubes = [];
-var visualizationNormals = [];
+var chunkBorderIndices = [];
+
+const shadersFolder = "";
+const clear_color = new ImGui.ImVec4(0.45, 0.55, 0.60, 1.00);
+
+
+// set uniforms, attributes, ... etc
+function setGLParameters(gl, program, obj) {
+
+  obj.positionLocation = gl.getAttribLocation(program, "a_position");
+  obj.normalLocation = gl.getAttribLocation(program, "a_normal");
+
+  // lookup uniforms
+  obj.worldMatrixLocation = gl.getUniformLocation(program, "u_worldMatrix");
+  obj.viewMatrixProjectionLocation = gl.getUniformLocation(program, "u_viewMatrixProjection");
+  obj.colorLocation = gl.getUniformLocation(program, "u_color");
+  obj.reverseLightDirectionLocation = gl.getUniformLocation(program, "u_reverseLightDirection");
+
+  return obj;
+}
 
 async function main() {
   // Get A WebGL context
   /** @type {HTMLCanvasElement} */
   var canvas = document.querySelector("#canvas");
+ 
   var gl = canvas.getContext("webgl");
 
   if (!gl) {
@@ -58,9 +79,7 @@ async function main() {
 
   gl.getExtension("OES_element_index_uint");
 
-  // console.log(gl.getSupportedExtensions());
 
-  // const canvas = document.getElementById("canvas");
   const devicePixelRatio = window.devicePixelRatio || 1;
   canvas.width = canvas.scrollWidth * devicePixelRatio;
   canvas.height = canvas.scrollHeight * devicePixelRatio;
@@ -79,114 +98,32 @@ async function main() {
   ImGui_Impl.Init(canvas);
 
   ImGui.StyleColorsDark();
-  //ImGui.StyleColorsClassic();
-
-  const clear_color = new ImGui.ImVec4(0.45, 0.55, 0.60, 1.00);
-
 
   // setup gui ##################################
 
-
   // setup GLSL program
-  var program = webglUtils.createProgramFromScripts(gl, ["vertex-shader-3d", "fragment-shader-3d"]);
 
-  // look up where the vertex data needs to go.
-  var positionLocation = gl.getAttribLocation(program, "a_position");
-  var normalLocation = gl.getAttribLocation(program, "a_normal");
+  
+  var program = await createProgramFromFiles(gl, "./shaders/vertex-shader-3d.glsl", "./shaders/fragment-shader-3d.glsl");
 
-  // lookup uniforms
-  var worldMatrixLocation = gl.getUniformLocation(program, "u_worldMatrix");
-  var viewMatrixProjectionLocation = gl.getUniformLocation(program, "u_viewMatrixProjection");
-  var colorLocation = gl.getUniformLocation(program, "u_color");
-  var reverseLightDirectionLocation = gl.getUniformLocation(program, "u_reverseLightDirection");
+  // start of shader ###########
 
-  // Create a buffer to put positions in
-  var positionBuffer = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-  await setTerrain(gl, sampler);
+  var positionLocation;
+  var normalLocation;
+  var worldMatrixLocation;
+  var viewMatrixProjectionLocation;
+  var colorLocation;
+  var reverseLightDirectionLocation;
 
-  var indexBuffer = gl.createBuffer();
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(indices), gl.STATIC_DRAW);
+  ({positionLocation, normalLocation, worldMatrixLocation, viewMatrixProjectionLocation, colorLocation, reverseLightDirectionLocation} = setGLParameters(gl, program, {positionLocation, normalLocation, worldMatrixLocation, colorLocation, reverseLightDirectionLocation}));
+  
+  var positionBuffer; var indexBuffer; var normalBuffer;
+  ({positionBuffer, indexBuffer, normalBuffer} = await setTerrain(gl, { positionBuffer, indexBuffer, normalBuffer }));
+  
+  addListeners();
 
-  var normalBuffer = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
-  // indices/3 is the number of vertices
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normals), gl.STATIC_DRAW);
-
-
-  document.addEventListener("keydown", (event) => {
-    // console.log(event.key);
-    keys[event.key] = true;
-  });
-
-  document.addEventListener("keyup", (event) => {
-    keys[event.key] = false;
-  });
-
-  document.addEventListener('mousemove', (event) => {
-      if (document.pointerLockElement === canvas) {
-          dx = event.movementX;
-          dy = event.movementY;
-
-          dx /= canvas.width;
-          dy /= canvas.height;
-      }
-  })
-
-  canvas.addEventListener('click', (event) => {
-      canvas.requestPointerLock();
-  })
-
-  setInterval(() => {
-
-    cameraYaw   += (dx * Math.PI) * lookSpeed * 60 / 1000;
-    let a = (dy * Math.PI/2) * lookSpeed * 60 / 1000;
-    cameraPitch = (Math.abs(cameraPitch - a) < 0.99*Math.PI/2) ?
-                  cameraPitch - a 
-                  : 
-                  Math.sign(cameraPitch)*0.99*Math.PI/2;
-
-    dx = 0;
-    dy = 0;
-
-    // drawGui();
-
-    if (keys['d']) {
-      cameraPos = m4.vectorSub(cameraPos, m4.vecScalarMultiply(right, speeds[index]));
-    }
-
-    if (keys['a']) {
-      cameraPos = m4.vectorAdd(cameraPos, m4.vecScalarMultiply(right, speeds[index]));
-    }
-
-    if (keys[' ']) {
-      cameraPos = m4.vectorAdd(cameraPos, m4.vecScalarMultiply(up, speeds[index]));
-    }
-
-    if (keys['Shift']) {
-      cameraPos = m4.vectorSub(cameraPos, m4.vecScalarMultiply(up, speeds[index]));
-    }
-
-    if (keys['s']) {
-      cameraPos = m4.vectorSub(cameraPos, m4.vecScalarMultiply(forward, speeds[index]));
-    }
-
-    if (keys['w']) {
-      cameraPos = m4.vectorAdd(cameraPos, m4.vecScalarMultiply(forward, speeds[index]));
-    }
-
-    cameraPos = [Math.round(cameraPos[0]), Math.round(cameraPos[1]), Math.round(cameraPos[2])]
-
-    if (keys['=']) {
-      index = (index+1) % speeds.length;
-      // dont wait for keyup
-      keys['='] = false;    
-    }
-
-  }, 20);
-
-
+  addInputInterval();
+  
   window.requestAnimationFrame(drawScene);
 
   // Draw the scene.
@@ -277,13 +214,6 @@ async function main() {
 
     gl.uniform3fv(reverseLightDirectionLocation, m4.normalize([0.5, 0.7, 1]));
 
-    // Draw the geometry.
-    // var primitiveType = gl.TRIANGLES;
-    // var offset = 0;
-    // var count = 36 * mapSize;
-    // console.log(normals.length, terrain.length);
-    // gl.drawArrays(primitiveType, offset, count);
-
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
 
     var primitiveType = gl.TRIANGLES;
@@ -308,10 +238,206 @@ async function main() {
     ImGui.SetNextWindowSize(new ImGui.ImVec2(294, 140), ImGui.Cond.FirstUseEver);
     ImGui.Begin("Debug", null, 64);
 
+    let valueChanged = fillGUI();
 
-    let valueChanged = false;
+    ImGui.End();
 
-    try {
+    ImGui.EndFrame();
+
+    ImGui.Render();
+    // gl.useProgram(program);
+
+    ImGui_Impl.RenderDrawData(ImGui.GetDrawData());
+
+    // draw gui ###################################
+
+
+    if (valueChanged) {
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+      // dont need to await, sampler is already initialized
+      setChunk(gl, sampler, 0, 0);
+
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(indices), gl.STATIC_DRAW);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normals), gl.STATIC_DRAW);
+    }
+
+    window.requestAnimationFrame(drawScene);
+  }
+  // end of shader ###########
+}
+
+function processFaces(func, arr, offset, ...params) {
+  var res = func(...params);
+  indices.push.apply(indices, res.indices.map(o => o+offset));
+  normals.push.apply(normals, res.normals);
+  arr.push.apply(arr, res.vertices);
+}
+
+async function setChunk(gl, sampler, offsetX, offsetY) {
+
+  if (sampler.pixels == null) {
+    await sampler.init_sampler("./resources/perlin_noise.png");
+  }
+
+  var percentage = 0;
+  var terrainA = [];
+  normals = [];
+  indices = [];
+
+  for (let i=0; i < 32; i++) {
+    for (let j=0; j < 32; j++) {
+      // holds values from 0 to 255
+      var pixel = sampler.sample_pixel(i+offsetX,j+offsetY,0,1);
+      processFaces(setCube, terrainA, terrainA.length/3, cubeSize, (j+offsetY)*cubeSize, pixel[0]*cubeSize, (i+offsetX)*cubeSize);
+    }
+  }
+
+  indices = [];
+  normals = [];
+  var terrainB = [];
+
+  for (let i=0; i < 32; i++) {
+    for (let j=0; j < 32; j++) {
+
+      // get height of cube
+      var height = terrainA[i*32*72 + j*72 + 4];
+      var heightF = height;
+      var heightB = height;
+      var heightL = height;
+      var heightR = height;
+
+      var AddfrontFace = true;
+      var AddbackFace = true;
+      var AddleftFace = true;
+      var AddrightFace = true;
+
+      if (i > 0)    { heightF = terrainA[(i-1)*32*72 + j*72 + 4]; if (heightF == height) AddbackFace  = false }
+      if (i < 31)   { heightB = terrainA[(i+1)*32*72 + j*72 + 4]; if (heightB == height) AddfrontFace = false }
+      if (j > 0)    { heightL = terrainA[i*32*72 + (j-1)*72 + 4]; if (heightL == height) AddrightFace = false }
+      if (j < 31)   { heightR = terrainA[i*32*72 + (j+1)*72 + 4]; if (heightR == height) AddleftFace  = false }
+
+      var diff = (height - Math.min(heightF, heightB, heightL, heightR)) / cubeSize;
+      processFaces(topFace,    terrainB, terrainB.length/3, cubeSize, (i+offsetX)*cubeSize, height, (j+offsetY)*cubeSize);
+      processFaces(bottomFace, terrainB, terrainB.length/3, cubeSize, (i+offsetX)*cubeSize, height, (j+offsetY)*cubeSize);
+      
+      if (AddrightFace == true) processFaces(rightFace, terrainB, terrainB.length/3, cubeSize, (i+offsetX)*cubeSize, height, (j+offsetY)*cubeSize);
+      if (AddleftFace  == true) processFaces(leftFace,  terrainB, terrainB.length/3, cubeSize, (i+offsetX)*cubeSize, height, (j+offsetY)*cubeSize);
+      if (AddfrontFace == true) processFaces(frontFace, terrainB, terrainB.length/3, cubeSize, (i+offsetX)*cubeSize, height, (j+offsetY)*cubeSize);
+      if (AddbackFace  == true) processFaces(backFace,  terrainB, terrainB.length/3, cubeSize, (i+offsetX)*cubeSize, height, (j+offsetY)*cubeSize);
+      for (let k=0; k < diff-1; k++) {
+        processFaces(topFace,   terrainB, terrainB.length/3, cubeSize, (i+offsetX)*cubeSize,  (height/cubeSize-k)*cubeSize, (j+offsetY)*cubeSize);
+        processFaces(rightFace, terrainB, terrainB.length/3, cubeSize, (i+offsetX)*cubeSize,  (height/cubeSize-k)*cubeSize, (j+offsetY)*cubeSize);
+        processFaces(leftFace,  terrainB, terrainB.length/3, cubeSize, (i+offsetX)*cubeSize,  (height/cubeSize-k)*cubeSize, (j+offsetY)*cubeSize);
+        processFaces(frontFace, terrainB, terrainB.length/3, cubeSize, (i+offsetX)*cubeSize,  (height/cubeSize-k)*cubeSize, (j+offsetY)*cubeSize);
+        processFaces(backFace,  terrainB, terrainB.length/3, cubeSize, (i+offsetX)*cubeSize,  (height/cubeSize-k)*cubeSize, (j+offsetY)*cubeSize);
+      }
+      if (diff > 0) { 
+        processFaces(bottomFace, terrainB, terrainB.length/3, cubeSize, (i+offsetX)*cubeSize,  (height/cubeSize-diff+1)*cubeSize, (j+offsetY)*cubeSize);
+        processFaces(rightFace,  terrainB, terrainB.length/3, cubeSize, (i+offsetX)*cubeSize,  (height/cubeSize-diff+1)*cubeSize, (j+offsetY)*cubeSize);
+        processFaces(leftFace,   terrainB, terrainB.length/3, cubeSize, (i+offsetX)*cubeSize,  (height/cubeSize-diff+1)*cubeSize, (j+offsetY)*cubeSize);
+        processFaces(frontFace,  terrainB, terrainB.length/3, cubeSize, (i+offsetX)*cubeSize,  (height/cubeSize-diff+1)*cubeSize, (j+offsetY)*cubeSize);
+        processFaces(backFace,   terrainB, terrainB.length/3, cubeSize, (i+offsetX)*cubeSize,  (height/cubeSize-diff+1)*cubeSize, (j+offsetY)*cubeSize);
+      }
+    }
+  }
+
+  terrain = terrainB;
+  triangleCount = indices.length/3;
+
+  // we cant optimize by initializing the arr beforehand, becaues we dont know diffs
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(terrain), gl.STATIC_DRAW);
+  console.log("terrain generated");
+}
+
+function addListeners() {
+    document.addEventListener("keydown", (event) => {
+    // console.log(event.key);
+    keys[event.key] = true;
+  });
+
+  document.addEventListener("keyup", (event) => {
+    keys[event.key] = false;
+  });
+
+  document.addEventListener('mousemove', (event) => {
+      if (document.pointerLockElement === canvas) {
+          dx = event.movementX;
+          dy = event.movementY;
+
+          dx /= canvas.width;
+          dy /= canvas.height;
+      }
+  })
+
+  canvas.addEventListener('click', (event) => {
+      canvas.requestPointerLock();
+  })
+}
+
+function addInputInterval() {
+
+    setInterval(() => {
+
+        cameraYaw   += (dx * Math.PI) * lookSpeed * 60 / 1000;
+        let a = (dy * Math.PI/2) * lookSpeed * 60 / 1000;
+        cameraPitch = (Math.abs(cameraPitch - a) < 0.99*Math.PI/2) ?
+                    cameraPitch - a 
+                    : 
+                    Math.sign(cameraPitch)*0.99*Math.PI/2;
+
+        dx = 0;
+        dy = 0;
+
+
+        if (keys['d']) {
+        cameraPos = m4.vectorSub(cameraPos, m4.vecScalarMultiply(right, speeds[index]));
+        }
+
+        if (keys['a']) {
+        cameraPos = m4.vectorAdd(cameraPos, m4.vecScalarMultiply(right, speeds[index]));
+        }
+
+        if (keys[' ']) {
+        cameraPos = m4.vectorAdd(cameraPos, m4.vecScalarMultiply(up, speeds[index]));
+        }
+
+        if (keys['Shift']) {
+        cameraPos = m4.vectorSub(cameraPos, m4.vecScalarMultiply(up, speeds[index]));
+        }
+
+        if (keys['s']) {
+        cameraPos = m4.vectorSub(cameraPos, m4.vecScalarMultiply(forward, speeds[index]));
+        }
+
+        if (keys['w']) {
+        cameraPos = m4.vectorAdd(cameraPos, m4.vecScalarMultiply(forward, speeds[index]));
+        }
+
+        if (keys['-']) {
+        keys['-'] = false;
+        showChunks = !showChunks;
+        }
+
+        cameraPos = [Math.round(cameraPos[0]), Math.round(cameraPos[1]), Math.round(cameraPos[2])]
+
+        if (keys['=']) {
+        index = (index+1) % speeds.length;
+        // dont wait for keyup
+        keys['='] = false;    
+        }
+
+    }, 20);
+}
+
+function fillGUI() {
+
+  var valueChanged = false;
+
+  try {
  
       // camera ####
       ImGui.Text(`X Y Z: ${cameraPos[0]} ${cameraPos[1]} ${cameraPos[2]}`);
@@ -324,8 +450,20 @@ async function main() {
       ImGui.Text(`vertices:  ${(2*indices.length/3).toLocaleString()}`);
       ImGui.Text(`indices:   ${(indices.length).toLocaleString()}`);
       ImGui.SameLine();
-      ImGui.Text(` ${(indices.length/(2**31-1))}% full`);
+      // accurate only for chrome
+      ImGui.Text(` ${(indices.length/45776773).toFixed(3)}% full`);
       ImGui.Text(`triangles: ${triangleCount.toLocaleString()}`);
+
+      ImGui.Separator();
+
+      if (performance.memory) {
+          let memoryInfo = performance.memory;
+          ImGui.Text(`Total JS heap size: ${Math.trunc(memoryInfo.totalJSHeapSize / 1048576)} MB`);
+          ImGui.Text(`Used JS heap size: ${Math.trunc(memoryInfo.usedJSHeapSize / 1048576)} MB`);
+          ImGui.Text(`JS heap size limit: ${memoryInfo.jsHeapSizeLimit / 1048576} MB`);
+      } else {
+          ImGui.Text("Memory information is not available in this environment.");
+      }
 
       ImGui.Separator();
 
@@ -351,395 +489,31 @@ async function main() {
       ImGui.SameLine();
       valueChanged |= ImGui.SliderInt("##5", (_ = cubeCountY) => cubeCountY = _, 1, sampler.height);
 
-      ImGui.Text("offset Y    ");
-      ImGui.SameLine();
-      valueChanged |= ImGui.SliderInt("##6", (_ = offsetY) => offsetY = _, 0, 100);
+      // ImGui.Text("offset Y    ");
+      // ImGui.SameLine();
+      // valueChanged |= ImGui.SliderInt("##6", (_ = offsetY) => offsetY = _, 0, 100);
 
       ImGui.Separator();
 
       ImGui.ColorEdit4("clear color", clear_color);
-
+      
     } catch (e) {
       ImGui.TextColored(new ImGui.ImVec4(1.0,0.0,0.0,1.0), "error: ");
       ImGui.SameLine();
       ImGui.Text(e.message);
     }
 
-    ImGui.End();
-
-    ImGui.EndFrame();
-
-    ImGui.Render();
-    // gl.useProgram(program);
-
-    ImGui_Impl.RenderDrawData(ImGui.GetDrawData());
-
-    // draw gui ###################################
-
-
-    if (valueChanged) {
-
-      // var positionBuffer = gl.createBuffer();
-      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-      // dont need to await, sampler is already initialized
-      setTerrain(gl, sampler);
-      // count = indices.length;
-
-      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(indices), gl.STATIC_DRAW);
-
-      // var normalBuffer = gl.createBuffer();
-      gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
-      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normals), gl.STATIC_DRAW);
-    }
-
-    window.requestAnimationFrame(drawScene);
-  }
+    return valueChanged;
 }
-
-
-function backFace(x, y, z, offset) {
-
-  indices.push.apply(indices, [0,1,2,0,2,3].map(o => o+offset));
-  normals.push.apply(normals, [
-    0,0,-1,
-    0,0,-1,
-    0,0,-1,
-    0,0,-1,
-  ]);
-
-  return [
-    x+cubeSize, y+cubeSize,  z,
-    x+cubeSize,  y,       z,
-    x,       y,       z,
-    x,  y+cubeSize,  z,
-  ]
-}
-
-function frontFace(x, y, z, offset) {
-
-  indices.push.apply(indices, [0,1,2,0,2,3].map(o => o+offset));
-  normals.push.apply(normals, [
-    0,0,1,
-    0,0,1,
-    0,0,1,
-    0,0,1,
-  ]);
-
-  return [
-    x,       y+cubeSize,  z+cubeSize,
-    x,       y,       z+cubeSize,
-    x+cubeSize,  y,       z+cubeSize,
-    x+cubeSize,  y+cubeSize,  z+cubeSize,
-  ]
-}
-
-function leftFace(x, y, z, offset) {
-
-  indices.push.apply(indices, [0,1,2,1,3,2].map(o => o+offset));
-  normals.push.apply(normals, [
-    -1,0,0,
-    -1,0,0,
-    -1,0,0,
-    -1,0,0
-  ]);
-
-  return [
-    x,       y,       z,
-    x,       y,       z+cubeSize,
-    x,       y+cubeSize,  z,
-    x,       y+cubeSize,  z+cubeSize,
-  ]
-}
-
-function rightFace(x, y, z, offset) {
-
-  indices.push.apply(indices, [0,1,2,1,3,2].map(o => o+offset));
-  normals.push.apply(normals, [
-    1,0,0,
-    1,0,0,
-    1,0,0,
-    1,0,0
-  ]);
-
-  return [
-    x+cubeSize,  y,       z,
-    x+cubeSize,  y+cubeSize,  z,
-    x+cubeSize,  y,       z+cubeSize,
-    x+cubeSize,  y+cubeSize,  z+cubeSize,
-  ]
-}
-
-function topFace(x, y, z, offset) {
-
-  indices.push.apply(indices, [0,1,2,1,3,2].map(o => o+offset));
-  normals.push.apply(normals, [
-    0,1,0,
-    0,1,0,
-    0,1,0,
-    0,1,0
-  ]);
-
-  return [
-    x,       y+cubeSize,  z,
-    x,       y+cubeSize,  z+cubeSize,
-    x+cubeSize,  y+cubeSize,  z,
-    x+cubeSize,  y+cubeSize,  z+cubeSize,
-  ]
-}
-
-function bottomFace(x, y, z, offset) {
-
-  indices.push.apply(indices, [0,1,2,1,3,2].map(o => o+offset));
-  normals.push.apply(normals, [
-    0,-1,0,
-    0,-1,0,
-    0,-1,0,
-    0,-1,0,
-  ]);
-
-  return [
-    x,       y,       z,
-    x+cubeSize,  y,       z,
-    x,       y,       z+cubeSize,
-    x+cubeSize,  y,       z+cubeSize,
-  ]
-}
-
-function setCube(x, y, z, offset) {
-
-  normals.push.apply(normals, [
-    
-    // back
-    0,0,-1,
-    0,0,-1,
-    0,0,-1,
-    0,0,-1,
-
-    // front
-    0,0,1,
-    0,0,1,
-    0,0,1,
-    0,0,1,
-
-    // left
-    -1,0,0,
-    -1,0,0,
-    -1,0,0,
-    -1,0,0,
-
-    // right
-    1,0,0,
-    1,0,0,
-    1,0,0,
-    1,0,0,
-
-       // top
-    0,1,0,
-    0,1,0,
-    0,1,0,
-    0,1,0,
-
-    // bottom
-    0,-1,0,
-    0,-1,0,
-    0,-1,0,
-    0,-1,0 ]);
-
-  indices.push.apply(indices, [0,1,2,0,2,3,  4,5,6,4,6,7,  8,9,10,9,11,10,  12,13,14,13,15,14,  16,17,18,17,19,18,  20,21,22,21,23,22].map(o => o+offset));
-  // indices.push.apply(indices, [0,1,2,0,2,3,  4,5,6,4,6,7,  2,5,8,5,4,8,  1,9,6,9,7,6,  8,4,9,4,7,9,  2,1,5,1,6,5].map(o => o+offset));
-
-  return [
-
-    x+cubeSize, y+cubeSize,  z,
-    x+cubeSize, y,           z,
-    x,          y,           z,
-    x,          y+cubeSize,  z,
-
-    x,          y+cubeSize,  z+cubeSize,
-    x,          y,           z+cubeSize,
-    x+cubeSize, y,           z+cubeSize,
-    x+cubeSize, y+cubeSize,  z+cubeSize,
-
-    x,       y,              z,
-    x,       y,              z+cubeSize,
-    x,       y+cubeSize,     z,
-    x,       y+cubeSize,     z+cubeSize,
-
-    x+cubeSize,  y,          z,
-    x+cubeSize,  y+cubeSize, z,
-    x+cubeSize,  y,          z+cubeSize,
-    x+cubeSize,  y+cubeSize, z+cubeSize,
-
-    x,           y+cubeSize, z,
-    x,           y+cubeSize, z+cubeSize,
-    x+cubeSize,  y+cubeSize, z,
-    x+cubeSize,  y+cubeSize, z+cubeSize,
-
-    x,           y,          z,
-    x+cubeSize,  y,          z,
-    x,           y,          z+cubeSize,
-    x+cubeSize,  y,          z+cubeSize,
-  ]
-}
-
-async function setTerrain(gl, sampler) {
-
-  if (sampler.pixels == null) {
-    await sampler.init_sampler("./resources/perlin_noise.png");
-  }
-
-  var percentage = 0;
-  var terrainA = [];
-  normals = [];
-  indices = [];
-
-  for (let i=0; i < cubeCountX; i++) {
-    for (let j=0; j < cubeCountY; j++) {
-      // holds values from 0 to 255
-      var pixel = sampler.sample_pixel(i,offsetY+j,0,1);
-      terrainA.push.apply(terrainA, setCube(j*cubeSize, pixel[0]*cubeSize, i*cubeSize, terrainA.length/3));
-    }
-  }
-
-  indices = [];
-  normals = [];
-  var terrainB = [];
-  visualizationCubes = [];
-
-  for (let i=0; i < cubeCountX; i++) {
-    for (let j=0; j < cubeCountY; j++) {
-
-      // get height of cube
-      var height = terrainA[i*cubeCountY*72 + j*72 + 4];
-      // var height = 0 ;
-      var heightF = height;
-      var heightB = height;
-      var heightL = height;
-      var heightR = height;
-
-      var AddfrontFace = true;
-      var AddbackFace = true;
-      var AddleftFace = true;
-      var AddrightFace = true;
-
-      if (j > 0)            { heightF = terrainA[(i-1)*cubeCountY*72 + j*72 + 4]; if (heightF == height) AddbackFace = false  }
-      if (j < cubeCountY-1) { heightB = terrainA[(i+1)*cubeCountY*72 + j*72 + 4]; if (heightB == height) AddfrontFace = false }
-      if (i > 0)            { heightL = terrainA[i*cubeCountY*72 + (j-1)*72 + 4]; if (heightL == height) AddrightFace = false }
-      if (i < cubeCountX-1) { heightR = terrainA[i*cubeCountY*72 + (j+1)*72 + 4]; if (heightR == height) AddleftFace = false  }
-
-      var diff = (height - Math.min(heightF, heightB, heightL, heightR)) / cubeSize;
-      // terrainB.push.apply(terrainB, setCube(i*cubeSize, height, j*cubeSize, terrainB.length/3));
-      terrainB.push.apply(terrainB, topFace   (i*cubeSize, height, j*cubeSize, terrainB.length/3));
-      terrainB.push.apply(terrainB, bottomFace(i*cubeSize, height, j*cubeSize, terrainB.length/3));
-      if (AddrightFace == true) terrainB.push.apply(terrainB, rightFace (i*cubeSize, height, j*cubeSize, terrainB.length/3));
-      if (AddleftFace  == true) terrainB.push.apply(terrainB, leftFace  (i*cubeSize, height, j*cubeSize, terrainB.length/3));
-      if (AddfrontFace == true) terrainB.push.apply(terrainB, frontFace (i*cubeSize, height, j*cubeSize, terrainB.length/3));
-      if (AddbackFace  == true) terrainB.push.apply(terrainB, backFace  (i*cubeSize, height, j*cubeSize, terrainB.length/3));
-
-      for (let k=0; k < diff-1; k++) {
-        // terrainB.push.apply(terrainB, setCube(i*cubeSize, (height/cubeSize-k)*cubeSize, j*cubeSize));
-        terrainB.push.apply(terrainB, topFace(i*cubeSize,    (height/cubeSize-k)*cubeSize, j*cubeSize, terrainB.length/3));
-        terrainB.push.apply(terrainB, rightFace(i*cubeSize,  (height/cubeSize-k)*cubeSize, j*cubeSize, terrainB.length/3));
-        terrainB.push.apply(terrainB, leftFace(i*cubeSize,   (height/cubeSize-k)*cubeSize, j*cubeSize, terrainB.length/3));
-        terrainB.push.apply(terrainB, frontFace(i*cubeSize,  (height/cubeSize-k)*cubeSize, j*cubeSize, terrainB.length/3));
-        terrainB.push.apply(terrainB, backFace(i*cubeSize,   (height/cubeSize-k)*cubeSize, j*cubeSize, terrainB.length/3));
-      }
-      if (diff > 0) { 
-        terrainB.push.apply(terrainB, bottomFace(i*cubeSize, (height/cubeSize-diff+1)*cubeSize, j*cubeSize, terrainB.length/3));
-        terrainB.push.apply(terrainB, rightFace(i*cubeSize,  (height/cubeSize-diff+1)*cubeSize, j*cubeSize, terrainB.length/3));
-        terrainB.push.apply(terrainB, leftFace(i*cubeSize,   (height/cubeSize-diff+1)*cubeSize, j*cubeSize, terrainB.length/3));
-        terrainB.push.apply(terrainB, frontFace(i*cubeSize,  (height/cubeSize-diff+1)*cubeSize, j*cubeSize, terrainB.length/3));
-        terrainB.push.apply(terrainB, backFace(i*cubeSize,   (height/cubeSize-diff+1)*cubeSize, j*cubeSize, terrainB.length/3));
-      }
-    }
-    // console.log("generating terrain", percentage++, "/", cubeCountX);
-  }
-
-  terrain = terrainB;
-  triangleCount = indices.length/3;
-
-  // we cant optimize by initializing the arr beforehand, becaues we dont know diffs
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(terrain), gl.STATIC_DRAW);
-  console.log("terrain generated");
-}
-
-// async function setTerrain2(gl, sampler) {
-
-//   if (sampler.pixels == null) {
-//     await sampler.init_sampler("./resources/perlin_noise.png");
-//   }
-
-//   var percentage = 0;
-//   var terrainA = [];
-//   normals = [];
-//   for (let i=0; i < cubeCountX; i++) {
-//     for (let j=0; j < cubeCountY; j++) {
-//       // holds values from 0 to 255
-//       var pixel = sampler.sample_pixel(i,offsetY+j,0,1);
-//       terrainA.push.apply(terrainA, setCube(j*cubeSize, pixel[0]*cubeSize, i*cubeSize));
-//     }
-//   }
-
-//   normals = [];
-//   terrain = [];
-//   var terrainB = [];
-//   visualizationCubes = [];
-
-//   for (let i=0; i < cubeCountX; i++) {
-//     for (let j=0; j < cubeCountY; j++) {
-
-//       // get height of cube
-//       var height = terrainA[i*cubeCountY*108 + j*108 + 4];
-//       var heightF = height;
-//       var heightB = height;
-//       var heightL = height;
-//       var heightR = height;
-
-//       var AddfrontFace = true;
-//       var AddbackFace = true;
-//       var AddleftFace = true;
-//       var AddrightFace = true;
-
-//       if (j > 0)            { heightF = terrainA[(i-1)*cubeCountY*108 + j*108 + 4]; if (heightF == height) AddbackFace = false }
-//       if (j < cubeCountY-1) { heightB = terrainA[(i+1)*cubeCountY*108 + j*108 + 4]; if (heightB == height) AddfrontFace = false }
-//       if (i > 0)            { heightL = terrainA[i*cubeCountY*108 + (j-1)*108 + 4]; if (heightL == height) AddrightFace = false }
-//       if (i < cubeCountX-1) { heightR = terrainA[i*cubeCountY*108 + (j+1)*108 + 4]; if (heightR == height) AddleftFace = false }
-
-//       var diff = (height - Math.min(heightF, heightB, heightL, heightR)) / cubeSize;
-//       // terrainB.push.apply(terrainB, setCube(i*cubeSize, height, j*cubeSize));
-//       // terrainB.push.apply(terrainB, topFace   (i*cubeSize, height, j*cubeSize));
-//       // terrainB.push.apply(terrainB, bottomFace(i*cubeSize, height, j*cubeSize));
-//       // if (AddrightFace == true) terrainB.push.apply(terrainB, rightFace (i*cubeSize, height, j*cubeSize));
-//       // if (AddleftFace == true)  terrainB.push.apply(terrainB, leftFace  (i*cubeSize, height, j*cubeSize));
-//       if (AddfrontFace == true) terrainB.push.apply(terrainB, frontFace(i*cubeSize, height, j*cubeSize));
-//       // if (AddbackFace == true)  terrainB.push.apply(terrainB, backFace  (i*cubeSize, height, j*cubeSize));
-
-//       for (let k=0; k < diff-1; k++) {
-//         // terrainB.push.apply(terrainB, setCube(i*cubeSize, (height/cubeSize-k)*cubeSize, j*cubeSize));
-//         terrainB.push.apply(terrainB, topFace(i*cubeSize,     (height/cubeSize-k)*cubeSize, j*cubeSize));
-//         terrainB.push.apply(terrainB, rightFace(i*cubeSize,   (height/cubeSize-k)*cubeSize, j*cubeSize));
-//         terrainB.push.apply(terrainB, leftFace(i*cubeSize,    (height/cubeSize-k)*cubeSize, j*cubeSize));
-//         terrainB.push.apply(terrainB, frontFace(i*cubeSize,   (height/cubeSize-k)*cubeSize, j*cubeSize));
-//         terrainB.push.apply(terrainB, backFace(i*cubeSize,    (height/cubeSize-k)*cubeSize, j*cubeSize));
-//       }
-//       if (diff > 0) { 
-//         terrainB.push.apply(terrainB, bottomFace(i*cubeSize,   (height/cubeSize-diff+1)*cubeSize, j*cubeSize));
-//         terrainB.push.apply(terrainB, rightFace(i*cubeSize,    (height/cubeSize-diff+1)*cubeSize, j*cubeSize));
-//         terrainB.push.apply(terrainB, leftFace(i*cubeSize,     (height/cubeSize-diff+1)*cubeSize, j*cubeSize));
-//         terrainB.push.apply(terrainB, frontFace(i*cubeSize,    (height/cubeSize-diff+1)*cubeSize, j*cubeSize));
-//         terrainB.push.apply(terrainB, backFace(i*cubeSize,     (height/cubeSize-diff+1)*cubeSize, j*cubeSize));
-//       }
-//     }
-//     // console.log("generating terrain", percentage++, "/", cubeCountX);
-//   }
-
-//   terrain = terrainB;
-//   triangleCount = terrain.length/3;
-
-//   // we cant optimize by initializing the arr beforehand, becaues we dont know diffs
-//   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(terrain), gl.STATIC_DRAW);
-//   console.log("terrain generated");
-// }
 
 main();
+
+// init shaders, gl program
+// add eventListeners for value changes
+// calculate matrices
+// set uniforms, lighting, matrices ...
+// draw triangles
+// draw gui
+// check for updates in gui
+
+export { setGLParameters };
