@@ -1,29 +1,21 @@
-<style>
-    @import url("https://webglfundamentals.org/webgl/resources/webgl-tutorials.css");
-    body {
-        margin: 0;
-    }
-    canvas {
-        width: 100vw;
-        height: 100vh;
-        display: block;
-    }
-    #ui {
-        width: 200px;
-    }
+<!DOCTYPE html>
 
-</style>
+<html>
+  <head>
+    <!-- webgl stuff -->
+    <script src="https://webglfundamentals.org/webgl/resources/webgl-utils.js"></script>
+    <!-- gui stuff -->
+    <script src="https://flyover.github.io/imgui-js/dist/imgui.umd.js"></script>
+    <script src="https://flyover.github.io/imgui-js/dist/imgui_impl.umd.js"></script>
+    <!-- module because it fetches files -->
+    <script type="module" src="./index.js"></script>
 
-<script src="https://webglfundamentals.org/webgl/resources/webgl-utils.js"></script>
-<script src="https://webglfundamentals.org/webgl/resources/webgl-lessons-ui.js"></script>
-<script src="https://flyover.github.io/imgui-js/dist/imgui.umd.js"></script>
-<script src="https://flyover.github.io/imgui-js/dist/imgui_impl.umd.js"></script>
-<script src="./gui.js"></script>
+    <link rel="stylesheet" href="styles.css">
+  </head>
 
-<canvas id="canvas"></canvas>
-<div id="uiContainer">
-  <div id="ui">
-    <div id="cameraAngle"></div>
-  </div>
-</div>
-<script type="module" src="./index.js"></script>
+  <body>
+    <canvas id="canvas"></canvas>
+  </body>
+</html>
+
+
