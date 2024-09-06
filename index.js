@@ -88,6 +88,19 @@ async function main() {
 
   // ############################### init programs 
 
+  // Tell WebGL how to convert from clip space to pixels
+  gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+
+  // Clear the canvas AND the depth buffer.
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+  // Turn on culling. By default backfacing triangles
+  // will be culled.
+  gl.enable(gl.CULL_FACE);
+
+  // Enable the depth buffer
+  gl.enable(gl.DEPTH_TEST);
+
   // asks for first frame
   window.requestAnimationFrame(drawScene);
 
@@ -107,12 +120,14 @@ async function main() {
     // updates fps
     time(async () => {
 
+      gl.useProgram(program);
       bindParams(gl, program);
-      render(gl, program, fieldOfViewRadians, zNear, zFar, camera);
+      render(gl, fieldOfViewRadians, zNear, zFar, camera);
       
       if (showChunks) {
+        gl.useProgram(chunkProgram);
         bindChunkBordersParams(gl, chunkProgram)
-        renderChunkBorders(gl, chunkProgram, fieldOfViewRadians, zNear, zFar, camera);
+        renderChunkBorders(gl, fieldOfViewRadians, zNear, zFar, camera);
       }
     })
 

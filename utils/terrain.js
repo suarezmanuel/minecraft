@@ -1,4 +1,4 @@
-import { backFace, frontFace, leftFace, rightFace, topFace, bottomFace, setCube, setCubeWireFrame } from "./geometry.js"
+import { setCube, setCubeWireFrame } from "./geometry.js"
 
 var cubeSize = 20;
 var cubeCountX = 16;
@@ -20,6 +20,7 @@ var activeChunksVertices = [];
 var activeChunksNormals  = [];
 
 var verticesProcessed = 0;
+var changed = true;
 
 async function initTerrain(sampler) {
 
@@ -39,8 +40,16 @@ async function initTerrain(sampler) {
     }
   }
 
-  await setChunk(sampler, cubeSize, 0, 0);
+  for (let i=0; i<chunkCountX; i++) {
+    for (let j=0; j<chunkCountZ; j++) {
+      await setChunk(sampler, cubeSize, i, j);
+    }
+  }
+
+  parseChunkMatrix();
   triangleCount = indices.length/3;
+  console.log("terrain generated");
+
 }
 
 function initChunkBorders() {
@@ -49,19 +58,28 @@ function initChunkBorders() {
 
 function bindTerrain(gl, obj) {
 
-  // Create a buffer to put positions in
-  if (obj.vertexBuffer == undefined) obj.vertexBuffer = gl.createBuffer();
-  
-  gl.bindBuffer(gl.ARRAY_BUFFER, obj.vertexBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+  if (changed) {
 
-  if (obj.indexBuffer == undefined) obj.indexBuffer = gl.createBuffer();
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, obj.indexBuffer);
-  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(indices), gl.STATIC_DRAW);
+    // Create a buffer to put positions in
+    if (obj.vertexBuffer == undefined) obj.vertexBuffer = gl.createBuffer();
+    if (obj.indexBuffer  == undefined) obj.indexBuffer  = gl.createBuffer();
+    if (obj.normalBuffer == undefined) obj.normalBuffer = gl.createBuffer();
 
-  if (obj.normalBuffer == undefined) obj.normalBuffer = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, obj.normalBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normals), gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, obj.normalBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normals), gl.STATIC_DRAW);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, obj.vertexBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, obj.indexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(indices), gl.STATIC_DRAW);
+    
+    indices  = [];
+    vertices = [];
+    normals  = [];
+
+    changed = false;
+  }
 
   return obj;
 }
@@ -105,8 +123,8 @@ async function setChunk(sampler, cubeSize, chunkX, chunkZ) {
   for (let i = 0; i < 32; i++) {
     for (let j = 0; j < 32; j++) {
       // holds values from 0 to 255
-      var pixel = sampler.sample_pixel(i + chunkX, j + chunkZ, 0, 1);
-      terrainA.push.apply(terrainA, setCube(cubeSize, (j + chunkZ) * cubeSize, pixel[0] * cubeSize, (i + chunkX) * cubeSize).vertices);
+      var pixel = sampler.sample_pixel(i + chunkX*32, j + chunkZ*32, 0, 1);
+      terrainA.push.apply(terrainA, setCube(cubeSize, (j + chunkZ*32) * cubeSize, pixel[0] * cubeSize, (i + chunkX*32) * cubeSize).vertices);
     }
   }
 
@@ -120,9 +138,9 @@ async function setChunk(sampler, cubeSize, chunkX, chunkZ) {
       var heightL = height; if (j > 0)  { heightL = terrainA[i * 32 * 72 + (j - 1) * 72 + 4]; }
       var heightR = height; if (j < 31) { heightR = terrainA[i * 32 * 72 + (j + 1) * 72 + 4]; }
       
-      var x = (i + chunkX) * cubeSize;
+      var x = (i + chunkX*32) * cubeSize;
       var y = height;
-      var z = (j + chunkZ) * cubeSize;
+      var z = (j + chunkZ*32) * cubeSize;
 
       var chunkY = Math.floor(y/(32*cubeSize));
 
@@ -133,13 +151,11 @@ async function setChunk(sampler, cubeSize, chunkX, chunkZ) {
       for (let k = 1; k < diff; k++) {
         y = (height/cubeSize - k) * cubeSize;
         chunkY = Math.floor(y/(32*cubeSize));
+        // the first params tell us where to store the cubes
         processFaces(setCube, chunkX, chunkY, chunkZ, cubeSize, x, y, z);
       }
     }
   }
-
-  parseChunkMatrix();
-  console.log("terrain generated");
 }
 
 
@@ -191,3 +207,5 @@ function parseChunkMatrix() {
 }
 
 export { bindTerrain, initTerrain, setChunkBorders, getTerrainInfo, getChunksInfo, initChunkBorders, bindChunkBorders };
+
+// queue of chunks [[], [], [], [], [], [], [], []] that get sent to vertices, indices according to some algo
