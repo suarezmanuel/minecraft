@@ -1,5 +1,9 @@
 import { degToRad, m4 } from "./utils/math.js"
-import { setParams, fillGUIRenderer, render, createProgram } from "./renderers/rasterizer.js"
+import { initParams, bindParams, fillGUIRenderer, render, createProgram } from "./renderers/rasterizer.js"
+import { initParams as initChunkBordersParams,
+         bindParams as bindChunkBordersParams,
+         render as renderChunkBorders,
+         createProgram as createChunkBordersProgram } from "./renderers/chunkBorders.js"
 
 "use strict";
 
@@ -18,6 +22,7 @@ var keys = []
 // speeds[index]
 var speeds = [1, 5, 10, 20, 50];
 var index = 0;
+var showChunks = false;
 
 var fps = 0;
 var sumFrameTimes = 0;
@@ -64,15 +69,24 @@ async function main() {
 
   ImGui.StyleColorsDark();
 
-  // setup gui ##################################
+  // ################################### setup gui
+
+
+  // init programs ###############################
 
   var program = await createProgram(gl);
 
-  await setParams(gl, program);
+  await initParams(gl, program);
+
+  var chunkProgram = await createChunkBordersProgram(gl);
+
+  initChunkBordersParams(gl, chunkProgram);
 
   addListeners();
 
   addInputInterval();
+
+  // ############################### init programs 
 
   // asks for first frame
   window.requestAnimationFrame(drawScene);
@@ -80,19 +94,26 @@ async function main() {
   // Draw the scene.
   function drawScene() {
 
+    webglUtils.resizeCanvasToDisplaySize(gl.canvas);
+
+    const glGUI = ImGui_Impl.gl;
+    glGUI && glGUI.viewport(0, 0, glGUI.drawingBufferWidth, glGUI.drawingBufferHeight);
+    glGUI && glGUI.clearColor(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
+    glGUI && glGUI.clear(glGUI.COLOR_BUFFER_BIT);
+
+    ImGui_Impl.NewFrame(10);
+    ImGui.NewFrame();
+
     // updates fps
-    time(() => {
-      webglUtils.resizeCanvasToDisplaySize(gl.canvas);
+    time(async () => {
 
-      const glGUI = ImGui_Impl.gl;
-      glGUI && glGUI.viewport(0, 0, glGUI.drawingBufferWidth, glGUI.drawingBufferHeight);
-      glGUI && glGUI.clearColor(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
-      glGUI && glGUI.clear(glGUI.COLOR_BUFFER_BIT);
-
-      ImGui_Impl.NewFrame(10);
-      ImGui.NewFrame();
-
+      bindParams(gl, program);
       render(gl, program, fieldOfViewRadians, zNear, zFar, camera);
+      
+      if (showChunks) {
+        bindChunkBordersParams(gl, chunkProgram)
+        renderChunkBorders(gl, chunkProgram, fieldOfViewRadians, zNear, zFar, camera);
+      }
     })
 
 
@@ -100,11 +121,7 @@ async function main() {
     ImGui.SetNextWindowSize(new ImGui.ImVec2(294, 140), ImGui.Cond.FirstUseEver);
     ImGui.Begin("Debug", null, 64);
 
-    fillGUIGeneral();
-
-    ImGui.Separator();
-
-    fillGUIRenderer(gl);
+    fillGUIGeneral(gl);
 
     ImGui.Separator();
 
@@ -123,7 +140,7 @@ async function main() {
   }
 }
 
-function fillGUIGeneral() {
+function fillGUIGeneral(gl) {
   ImGui.Text(`X Y Z: ${camera.pos[0]} ${camera.pos[1]} ${camera.pos[2]}`);
   ImGui.Text(`fps: ${fps}`);
   ImGui.Text(`speed: ${speeds[index]}`);
@@ -141,19 +158,24 @@ function fillGUIGeneral() {
 
   ImGui.Separator();
 
+  fillGUIRenderer(gl);
+
+  ImGui.Separator();
+
   ImGui.Text("zNear       ");
   ImGui.SameLine();
   ImGui.SliderInt("##1", (_ = zNear) => zNear = _, 1, 100);
   ImGui.Text("zFar        ");
   ImGui.SameLine();
   ImGui.SliderInt("##2", (_ = zFar) => zFar = _, 5000, 100000);
+
 }
 
-function time(func) {
+async function time(func) {
 
   let currentFrameTime = performance.now();
 
-  func();
+  await func();
 
   frameCount++;
   sumFrameTimes += performance.now() - currentFrameTime;

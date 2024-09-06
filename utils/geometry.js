@@ -1,4 +1,4 @@
-function backFace(cubeSize, x, y, z,) {
+function backFace(cubeSize, x, y, z) {
 
   return {
     indices:
@@ -18,7 +18,7 @@ function backFace(cubeSize, x, y, z,) {
   }
 }
 
-function frontFace(cubeSize, x, y, z,) {
+function frontFace(cubeSize, x, y, z) {
 
   return {
     indices:
@@ -38,7 +38,7 @@ function frontFace(cubeSize, x, y, z,) {
   }
 }
 
-function leftFace(cubeSize, x, y, z,) {
+function leftFace(cubeSize, x, y, z) {
 
   return {
     indices:
@@ -58,7 +58,7 @@ function leftFace(cubeSize, x, y, z,) {
   }
 }
 
-function rightFace(cubeSize, x, y, z,) {
+function rightFace(cubeSize, x, y, z) {
 
   return {
     indices:
@@ -78,7 +78,7 @@ function rightFace(cubeSize, x, y, z,) {
   }
 }
 
-function topFace(cubeSize, x, y, z,) {
+function topFace(cubeSize, x, y, z) {
 
   return {
     indices:
@@ -98,7 +98,7 @@ function topFace(cubeSize, x, y, z,) {
   }
 }
 
-function bottomFace(cubeSize, x, y, z,) {
+function bottomFace(cubeSize, x, y, z) {
 
   return {
     indices:
@@ -118,7 +118,7 @@ function bottomFace(cubeSize, x, y, z,) {
   }
 }
 
-function setCube(cubeSize, x, y, z,) {
+function setCube(cubeSize, x, y, z) {
 
   return {
     indices:
@@ -196,4 +196,24 @@ function setCube(cubeSize, x, y, z,) {
   }
 }
 
-export { backFace, frontFace, leftFace, rightFace, topFace, bottomFace, setCube };
+function setCubeWireFrame(cubeSize, x, y, z) {
+
+  return {
+    indices:
+      [0,1,1,2,2,3,3,0,  4,5,5,6,6,7,7,4, 0,4, 1,5, 2,6, 3,7],
+    vertices:
+      [
+        x, y+cubeSize, z,
+        x, y,z,
+        x+cubeSize ,y, z,
+        x+cubeSize, y+cubeSize, z,
+
+        x, y+cubeSize, z+cubeSize,
+        x, y,z+cubeSize,
+        x+cubeSize ,y, z+cubeSize,
+        x+cubeSize, y+cubeSize, z+cubeSize,
+      ]
+  }
+}
+
+export { backFace, frontFace, leftFace, rightFace, topFace, bottomFace, setCube, setCubeWireFrame };

@@ -1,7 +1,7 @@
 import { png_sampler } from "../utils/png.js"
 import { m4 } from "../utils/math.js"
 import { createProgramFromFiles } from "../utils/shaderLoader.js"
-import { setTerrain, getTerrainInfo } from "../utils/terrain.js"
+import { bindTerrain, getTerrainInfo, initTerrain} from "../utils/terrain.js"
 
 "use strict";
 
@@ -15,22 +15,21 @@ var viewMatrixProjectionLocation;
 var colorLocation;
 var reverseLightDirectionLocation;
 
-var positionBuffer;
+var vertexBuffer;
 var indexBuffer;
 var normalBuffer;
 
 var terrainInfo;
 
-async function setParams(gl, program) {
-
+async function initParams(gl, program) {
   setGLParameters(gl, program);
-
+  await initTerrain(sampler);
   terrainInfo = getTerrainInfo();
+}
 
-  // check that these get initialized
-  ({positionBuffer, indexBuffer, normalBuffer} = await setTerrain(gl, sampler, terrainInfo.cubeSize, {positionBuffer, indexBuffer, normalBuffer}));
-  
-  terrainInfo = getTerrainInfo();
+function bindParams(gl) {
+  // will get initialized if undefined
+  ({vertexBuffer, indexBuffer, normalBuffer} = bindTerrain(gl, {vertexBuffer, indexBuffer, normalBuffer}));
 }
 
 // set uniforms, attributes, ... etc
@@ -68,9 +67,9 @@ function render(gl, program, fieldOfViewRadians, zNear, zFar, camera) {
   gl.enableVertexAttribArray(positionLocation);
 
   // Bind the position buffer.
-  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
 
-  // Tell the position attribute how to get data out of positionBuffer (ARRAY_BUFFER)
+  // Tell the position attribute how to get data out of vertexBuffer (ARRAY_BUFFER)
   var size = 3;          // 3 components per iteration
   var type = gl.FLOAT;   // the data is 32bit floats
   var normalize = false; // don't normalize the data
@@ -169,7 +168,7 @@ function fillGUIRenderer(gl) {
 
   if (valueChanged) {
     // this should set the buffers accordingly
-    setTerrain(gl, sampler, terrainInfo.cubeSize, {positionBuffer, indexBuffer, normalBuffer});
+    bindTerrain(gl, sampler, terrainInfo.cubeSize, {vertexBuffer, indexBuffer, normalBuffer});
   }
 }
 
@@ -177,17 +176,4 @@ async function createProgram(gl) {
   return await createProgramFromFiles(gl, "./shaders/vertex-shader-3d.glsl", "./shaders/fragment-shader-3d.glsl");
 }
 
-
-// init shaders, gl program
-// add eventListeners for value changes
-// calculate matrices
-// set uniforms, lighting, matrices ...
-// draw triangles
-// draw gui
-// check for updates in gui
-
-export { render, createProgram, fillGUIRenderer, setParams };
-
-
-// handle camera
-// give variables for gui
+export { render, createProgram, fillGUIRenderer, bindParams, initParams };
