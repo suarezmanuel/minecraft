@@ -133,7 +133,7 @@ function fillGUIRenderer(gl) {
 
     ImGui.Text("cube size:  ");
     ImGui.SameLine();
-    valueChanged |= ImGui.SliderInt("##3", (_ = terrainInfo.cubeSize) => terrainInfo.cubeSize = _, 5, 30);
+    valueChanged |= ImGui.SliderInt("##3", (_ = terrainInfo.CUBE_SIZE) => terrainInfo.CUBE_SIZE = _, 5, 30);
 
     ImGui.Text("cube count X");
     ImGui.SameLine();
