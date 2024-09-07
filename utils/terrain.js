@@ -5,9 +5,9 @@ var cubeCountX = 16;
 var cubeCountY = 16;
 var triangleCount = 0;
 
-var chunkCountX = 10;
-var chunkCountY = 10;
-var chunkCountZ = 10;
+var chunkCountX = 2;
+var chunkCountY = 2;
+var chunkCountZ = 2;
 
 var indices = [];
 var normals = [];
@@ -36,6 +36,21 @@ async function initTerrain(sampler) {
         activeChunksIndices[i][j].push([]);
         activeChunksVertices[i][j].push([]);
         activeChunksNormals[i][j].push([]);
+        for (let ii=0; ii<32; ii++) {
+          activeChunksIndices[i][j][k].push([]);
+          activeChunksVertices[i][j][k].push([]);
+          activeChunksNormals[i][j][k].push([]);
+          for (let jj=0; jj<32; jj++) {
+            activeChunksIndices[i][j][k][ii].push([]);
+            activeChunksVertices[i][j][k][ii].push([]);
+            activeChunksNormals[i][j][k][ii].push([]);
+            for (let kk=0; kk<32; kk++) {
+              activeChunksIndices[i][j][k][ii][jj].push([]);
+              activeChunksVertices[i][j][k][ii][jj].push([]);
+              activeChunksNormals[i][j][k][ii][jj].push([]);
+            }
+          }
+        }
       }
     }
   }
@@ -144,16 +159,19 @@ async function setChunk(sampler, cubeSize, chunkX, chunkZ) {
 
       var chunkY = Math.floor(y/(32*cubeSize));
 
-      processFaces(setCube, chunkX, chunkY, chunkZ, cubeSize, x, y, z);
+      var xIndex = i;
+      var yIndex = y % (32*cubeSize);
+      var zIndex = j;
+
+      processFaces(setCube, chunkX, chunkY, chunkZ, cubeSize, xIndex, yIndex, zIndex, x, y, z);
 
       var diff = (height - Math.min(heightF, heightB, heightL, heightR)) / cubeSize;
-
-      for (let k = 1; k < diff; k++) {
-        y = (height/cubeSize - k) * cubeSize;
-        chunkY = Math.floor(y/(32*cubeSize));
-        // the first params tell us where to store the cubes
-        processFaces(setCube, chunkX, chunkY, chunkZ, cubeSize, x, y, z);
-      }
+      // for (let k = 1; k < diff; k++) {
+      //   y = (height/cubeSize - k) * cubeSize;
+      //   chunkY = Math.floor(y/(32*cubeSize));
+      //   // the first params tell us where to store the cubes
+      //   processFaces(setCube, chunkX, chunkY, chunkZ, cubeSize, x, y, z);
+      // }
     }
   }
 }
@@ -179,14 +197,19 @@ function setChunkBorders() {
   }
 }
 
-function processFaces(func, chunkX, chunkY, chunkZ, ...params) {
+function processFaces(func, chunkX, chunkY, chunkZ, xIndex, yIndex, zIndex, ...params) {
 
   var res = func(...params);
 
-  activeChunksIndices [chunkX][chunkY][chunkZ].push.apply(activeChunksIndices [chunkX][chunkY][chunkZ], res.indices.map(o => o+verticesProcessed/3));
-  activeChunksVertices[chunkX][chunkY][chunkZ].push.apply(activeChunksVertices[chunkX][chunkY][chunkZ], res.vertices);
+  // activeChunksIndices [chunkX][chunkY][chunkZ].push.apply(activeChunksIndices [chunkX][chunkY][chunkZ], res.indices.map(o => o+verticesProcessed/3));
+  // activeChunksVertices[chunkX][chunkY][chunkZ].push.apply(activeChunksVertices[chunkX][chunkY][chunkZ], res.vertices);
+  // verticesProcessed += res.vertices.length;
+  // activeChunksNormals [chunkX][chunkY][chunkZ].push.apply(activeChunksNormals [chunkX][chunkY][chunkZ], res.normals);
+
+  activeChunksIndices [chunkX][chunkY][chunkZ][xIndex][yIndex][zIndex] = res.indices.map(o => o+verticesProcessed/3);
+  activeChunksVertices[chunkX][chunkY][chunkZ][xIndex][yIndex][zIndex] = res.vertices;
   verticesProcessed += res.vertices.length;
-  activeChunksNormals [chunkX][chunkY][chunkZ].push.apply(activeChunksNormals [chunkX][chunkY][chunkZ], res.normals);
+  activeChunksNormals [chunkX][chunkY][chunkZ][xIndex][yIndex][zIndex] = res.normals;
 }
 
 function parseChunkMatrix() {
@@ -198,9 +221,15 @@ function parseChunkMatrix() {
   for (let i=0; i<chunkCountX; i++) {
     for (let j=0; j<chunkCountY; j++) {
       for (let k=0; k<chunkCountZ; k++) {
-        indices.push.apply (indices,  activeChunksIndices [i][j][k]);
-        vertices.push.apply(vertices, activeChunksVertices[i][j][k]);
-        normals.push.apply (normals,  activeChunksNormals [i][j][k]);
+        for (let ii=0; ii<32; ii++) {
+          for (let jj=0; jj<32; jj++) {
+            for (let kk=0; kk<32; kk++) {
+              indices.push.apply (indices,  activeChunksIndices [i][j][k][ii][jj][kk]);
+              vertices.push.apply(vertices, activeChunksVertices[i][j][k][ii][jj][kk]);
+              normals.push.apply (normals,  activeChunksNormals [i][j][k][ii][jj][kk]);
+            }
+          }
+        }
       }
     }
   }
