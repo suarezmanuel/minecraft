@@ -1,13 +1,13 @@
-import { setCube, setCubeWireFrame } from "./geometry.js"
+import { setCube, setCubeWireFrame, leftFace, rightFace, bottomFace, topFace, frontFace, backFace } from "./geometry.js"
 
 var CUBE_SIZE = 20;
 var cubeCountX = 16;
 var cubeCountY = 16;
 var triangleCount = 0;
 
-var CHUNK_COUNT_X = 16;
+var CHUNK_COUNT_X = 1;
 var CHUNK_COUNT_Y = 7;
-var CHUNK_COUNT_Z = 16;
+var CHUNK_COUNT_Z = 1;
 var CHUNK_SIZE = 32;
 
 var indices = [];
@@ -21,6 +21,12 @@ var activeChunks = new Array(CHUNK_COUNT_X*CHUNK_COUNT_Y*CHUNK_COUNT_Z).fill(0);
 var heightsMask  = new Array(CHUNK_COUNT_X*CHUNK_COUNT_Z*CHUNK_SIZE*CHUNK_SIZE);
 
 var changed = true;
+
+var sumTriTime = 0;
+var sumAllTime = 0;
+
+var t1 = 0;
+var t2 = 0;
 
 async function initTerrain(sampler) {
 
@@ -36,9 +42,13 @@ async function initTerrain(sampler) {
 
   for (let i=0; i<CHUNK_COUNT_X; i++) {
     for (let j=0; j<CHUNK_COUNT_Z; j++) {
-      await setChunk(sampler, i, j);
+     ({t1, t2} = await setChunk(sampler, i, j));
+     sumTriTime += t1;
+     sumAllTime += t2;
   }}
 
+  console.log("sum triangles time", sumTriTime);
+  console.log("sum all time", sumAllTime);
 
   for (let i=0; i<CHUNK_COUNT_X; i++) {
     for (let j=0; j<CHUNK_COUNT_Z; j++) {
@@ -46,7 +56,7 @@ async function initTerrain(sampler) {
       console.log(i*CHUNK_COUNT_X + j, "done out of", CHUNK_COUNT_X*CHUNK_COUNT_Z);
   }}
 
-  parseChunkMatrix();
+  parseChunkMatrix2();
   triangleCount = indices.length/3;
   console.log("terrain generated");
 }
@@ -110,6 +120,12 @@ function getChunksInfo() {
 
 async function setChunk(sampler, chunkX, chunkZ) {
 
+  var triTime = 0;
+  var allTime = 0;
+
+  triTime = performance.now();
+  allTime = performance.now();
+
   if (sampler.pixels == null) {
     await sampler.init_sampler("./resources/perlin_noise3.png");
   }
@@ -125,6 +141,8 @@ async function setChunk(sampler, chunkX, chunkZ) {
       heightsMask[(chunkX * CHUNK_COUNT_Z + chunkZ) * CHUNK_SIZE * CHUNK_SIZE + i * CHUNK_SIZE + j] = Math.round(pixel[0]);
   }}
 
+  triTime = performance.now() - triTime;
+
   for (let i = 0; i < CHUNK_SIZE; i++) {
     for (let j = 0; j < CHUNK_SIZE; j++) {
       // get height of cube
@@ -139,6 +157,10 @@ async function setChunk(sampler, chunkX, chunkZ) {
       chunksMask[chunkX][chunkY][chunkZ][(xIndex * CHUNK_SIZE + zIndex) * CHUNK_SIZE + yIndex] = 1;
       activeChunks[(chunkX * CHUNK_COUNT_Z + chunkZ) * CHUNK_COUNT_Y + chunkY] = 1;      
   }} 
+
+  allTime = performance.now() - allTime;
+
+  return {t1: triTime, t2: allTime};
 }
 
 function fillChunk(chunkX, chunkZ) {
@@ -209,21 +231,132 @@ function parseChunkMatrix() {
       for (let k=0; k<CHUNK_COUNT_Z; k++) {
 
         var arr = chunksMask[i][j][k];
-        // if (activeChunks[i * CHUNK_COUNT_X*CHUNK_COUNT_Y + j * CHUNK_COUNT_Y + k] == 0) continue;
         if (activeChunks[(i * CHUNK_COUNT_Z + k) * CHUNK_COUNT_Y + j] == 0) continue;
 
         for (let ii=0; ii<CHUNK_SIZE; ii++) {
           for (let jj=0; jj<CHUNK_SIZE; jj++) {
             for (let kk=0; kk<CHUNK_SIZE; kk++) {
 
-              // if (arr[ii*CHUNK_SIZE*CHUNK_SIZE + jj*CHUNK_SIZE + kk] == 1) {
               if (arr[(ii * CHUNK_SIZE + kk) * CHUNK_SIZE + jj] == 1) {
                 var ans = setCube(CUBE_SIZE, ii*CUBE_SIZE + i*c, jj*CUBE_SIZE + j*c, kk*CUBE_SIZE + k*c);
                 indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
                 vertices.push.apply(vertices, ans.vertices);
                 normals.push.apply (normals,  ans.normals);
               }
+        }}}
+  }}}
+}
 
+function parseChunkMatrix2() {
+
+  indices  = [];
+  vertices = [];
+  normals  = [];
+
+  const c = CHUNK_SIZE*CUBE_SIZE;
+  const cc = CHUNK_SIZE*CHUNK_SIZE;
+
+  for (let i=0; i<CHUNK_COUNT_X; i++) {
+    for (let j=0; j<CHUNK_COUNT_Y; j++) {
+      for (let k=0; k<CHUNK_COUNT_Z; k++) {
+
+        var arr = chunksMask[i][j][k];
+        if (activeChunks[(i * CHUNK_COUNT_Z + k) * CHUNK_COUNT_Y + j] == 0) continue;
+
+        
+        for (let ii=0; ii<CHUNK_SIZE; ii++) {
+
+          if (ii > 1) continue;
+
+          // get the whole Y*Z 2D array
+          var subArray = arr.slice(ii*cc, (ii+1)*cc);
+
+          for (let jj=0; jj<CHUNK_SIZE; jj++) {
+
+            
+            var t = parseInt(subArray.slice(jj*CHUNK_SIZE, (jj+1)*CHUNK_SIZE).join(''), 2);
+            var t1 = ((t >>> 1) & (~t)) >>> 0;
+            var t2 = ((t << 1) & (~t)) >>> 0;
+
+            // front to back
+            for (let kk=0; kk<CHUNK_SIZE; kk++) {
+              if ((t >> kk) & 1) {
+                var ans = leftFace(CUBE_SIZE, ii*CUBE_SIZE+ i*c, (CHUNK_SIZE-kk)*CUBE_SIZE + j*c, jj*CUBE_SIZE + k*c);
+                indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
+                vertices.push.apply(vertices, ans.vertices);
+                normals.push.apply (normals,  ans.normals);
+              } 
+
+              if ((t >> kk) & 1) {
+                var ans = rightFace(CUBE_SIZE, ii*CUBE_SIZE+ i*c, (CHUNK_SIZE-kk)*CUBE_SIZE + j*c, jj*CUBE_SIZE + k*c);
+                indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
+                vertices.push.apply(vertices, ans.vertices);
+                normals.push.apply (normals,  ans.normals);
+              }
+            }
+          }
+        }
+
+
+        for (let ii=0; ii<CHUNK_SIZE; ii++) {
+          
+          for (let kk=0; kk<CHUNK_SIZE; kk++) {
+
+            var a = [];
+            for (let jj=0; jj<CHUNK_SIZE; jj++) {
+              a.push(arr[ii*CHUNK_SIZE*CHUNK_SIZE + jj*CHUNK_SIZE + kk]);
+            }
+            var t = parseInt(a.join(''), 2);
+            var t1 = ((t >>> 1) & (~t)) >>> 0;
+            var t2 = ((t << 1) & (~t)) >>> 0;
+  
+            // front to back
+            for (let jj=0; jj<CHUNK_SIZE; jj++) {
+              if ((t >> jj) & 1) {
+                var ans = topFace(CUBE_SIZE, ii*CUBE_SIZE+ i*c, (kk+1)*CUBE_SIZE + j*c, (CHUNK_SIZE-jj-1)*CUBE_SIZE + k*c);
+                indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
+                vertices.push.apply(vertices, ans.vertices);
+                normals.push.apply (normals,  ans.normals);
+              }
+  
+              if ((t >> jj) & 1) {
+                var ans = bottomFace(CUBE_SIZE, ii*CUBE_SIZE+ i*c, (kk+1)*CUBE_SIZE + j*c, (CHUNK_SIZE-jj-1)*CUBE_SIZE + k*c);
+                indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
+                vertices.push.apply(vertices, ans.vertices);
+                normals.push.apply (normals,  ans.normals);
+              }
+            }
+          }
+        }
+
+        for (let kk=0; kk<CHUNK_SIZE; kk++) {
+
+          for (let jj=0; jj<CHUNK_SIZE; jj++) {
+            
+            var a =[];
+            for (let ii=0; ii<CHUNK_SIZE; ii++)  {
+              a.push(arr[ii*CHUNK_SIZE*CHUNK_SIZE + jj*CHUNK_SIZE + kk]);
+            }
+
+            var t = parseInt(a.join(''), 2);
+            var t1 = ((t >>> 1) & (~t)) >>> 0;
+            var t2 = ((t << 1) & (~t)) >>> 0;
+
+            // front to back
+            for (let ii=0; ii<CHUNK_SIZE; ii++) {
+              if ((t >> ii) & 1) {
+                var ans = frontFace(CUBE_SIZE, (CHUNK_SIZE-ii-1)*CUBE_SIZE+ i*c, (kk+1)*CUBE_SIZE + j*c, jj*CUBE_SIZE + k*c);
+                indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
+                vertices.push.apply(vertices, ans.vertices);
+                normals.push.apply (normals,  ans.normals);
+              }
+
+              if ((t >> ii) & 1) {
+                var ans = backFace(CUBE_SIZE, (CHUNK_SIZE-ii-1)*CUBE_SIZE+ i*c, (kk+1)*CUBE_SIZE + j*c, jj*CUBE_SIZE + k*c);
+                indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
+                vertices.push.apply(vertices, ans.vertices);
+                normals.push.apply (normals,  ans.normals);
+              }
             }
           }
         }
@@ -232,6 +365,18 @@ function parseChunkMatrix() {
   }
 }
 
+
 export { bindTerrain, initTerrain, setChunkBorders, getTerrainInfo, getChunksInfo, initChunkBorders, bindChunkBorders };
 
 // queue of chunks [[], [], [], [], [], [], [], []] that get sent to vertices, indices according to some algo
+
+ 
+
+/*
+
+generate perlin noise terrain setChunk (buffer of chunks positions to generate)
+compress (buffer of things to compress)
+triangles, uncompress (buffer of things to uncompress to triangles)
+chunk manager (buffer of chunks to load)
+
+*/

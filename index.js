@@ -5,6 +5,12 @@ import { initParams as initChunkBordersParams,
          render as renderChunkBorders,
          createProgram as createChunkBordersProgram } from "./renderers/chunkBorders.js"
 
+import { initParams as initCrosshairParams,
+         bindParams as bindCrosshairParams,
+         render as renderCrosshair,
+         createProgram as createCrosshairProgram } from "./renderers/crosshair.js"
+         
+
 "use strict";
 
 var camera = {pos: [0,0,0], up: [0,1,0], forward: [0,0,1], right: [1,0,0], yaw: 0, pitch: 0}
@@ -79,8 +85,12 @@ async function main() {
   await initParams(gl, program);
 
   var chunkProgram = await createChunkBordersProgram(gl);
-
+  
   initChunkBordersParams(gl, chunkProgram);
+  
+  var crosshairProgram = await createCrosshairProgram(gl);
+
+  initCrosshairParams(gl, crosshairProgram);
 
   addListeners();
 
@@ -129,6 +139,10 @@ async function main() {
         bindChunkBordersParams(gl, chunkProgram)
         renderChunkBorders(gl, fieldOfViewRadians, zNear, zFar, camera);
       }
+      
+      gl.useProgram(crosshairProgram);
+      bindCrosshairParams(gl, crosshairProgram);
+      renderCrosshair(gl, fieldOfViewRadians, zNear, zFar, camera);
     })
 
 

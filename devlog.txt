@@ -1,0 +1,13 @@
+order of implementations
+
+1. render a cube with shaders
+2. sample image and render the terrain, add shadows with face normals, camera movement
+3. added imgui for changing values on the fly
+4. made the fps counter more accurate, made normals not move when moving camera,
+   camera moves more intuitively, fps counter now does an average
+5. can change terrain size with imgui sliders, divided cubes into faces such that i dont add bottom faces when stacking cubes. started on indices
+6. indices now work, made each face use less vertices, but couldn't bring the number of vertices of a cube to 8 because of connecting faces having different normals
+7. made the imgui stuff better
+8. started dividing the code into files, to handle multiple shader programs, moved shaders into their own files.
+9. finally understood how to work with multiple shader programs, now we have chunk generation and chunk wireframes
+10. fixed the chunk generation to acknowledge neighbor chunks
