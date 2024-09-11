@@ -5,9 +5,9 @@ var cubeCountX = 16;
 var cubeCountY = 16;
 var triangleCount = 0;
 
-var CHUNK_COUNT_X = 1;
-var CHUNK_COUNT_Y = 7;
-var CHUNK_COUNT_Z = 1;
+var CHUNK_COUNT_X = 20;
+var CHUNK_COUNT_Y = 10;
+var CHUNK_COUNT_Z = 20;
 var CHUNK_SIZE = 32;
 
 var indices = [];
@@ -56,7 +56,7 @@ async function initTerrain(sampler) {
       console.log(i*CHUNK_COUNT_X + j, "done out of", CHUNK_COUNT_X*CHUNK_COUNT_Z);
   }}
 
-  parseChunkMatrix2();
+  parseChunkMatrix();
   triangleCount = indices.length/3;
   console.log("terrain generated");
 }
