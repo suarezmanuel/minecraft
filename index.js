@@ -18,7 +18,7 @@ var camera = {pos: [0,0,0], up: [0,1,0], forward: [0,0,1], right: [1,0,0], yaw: 
 var lookSpeed = 5;
 var fieldOfViewRadians = degToRad(60);
 var zNear = 1;
-var zFar = 5000;
+var zFar = 100000;
 
 // mouse
 var dx = 0;
@@ -106,7 +106,7 @@ async function main() {
 
   // Turn on culling. By default backfacing triangles
   // will be culled.
-  gl.enable(gl.CULL_FACE);
+  // gl.enable(gl.CULL_FACE);
 
   // Enable the depth buffer
   gl.enable(gl.DEPTH_TEST);

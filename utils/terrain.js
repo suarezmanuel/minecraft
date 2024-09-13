@@ -5,9 +5,9 @@ var cubeCountX = 16;
 var cubeCountY = 16;
 var triangleCount = 0;
 
-var CHUNK_COUNT_X = 20;
-var CHUNK_COUNT_Y = 10;
-var CHUNK_COUNT_Z = 20;
+var CHUNK_COUNT_X = 10;
+var CHUNK_COUNT_Y = 7;
+var CHUNK_COUNT_Z = 10;
 var CHUNK_SIZE = 32;
 
 var indices = [];
@@ -42,19 +42,22 @@ async function initTerrain(sampler) {
 
   for (let i=0; i<CHUNK_COUNT_X; i++) {
     for (let j=0; j<CHUNK_COUNT_Z; j++) {
-     ({t1, t2} = await setChunk(sampler, i, j));
-     sumTriTime += t1;
-     sumAllTime += t2;
-  }}
+
+      var arr = new Array(CHUNK_SIZE*CHUNK_SIZE).fill(0);
+      ({t1, t2} = await setChunk(sampler, i, j));
+      sumTriTime += t1; sumAllTime += t2;
+      fillChunk(i, j);
+      console.log(i*CHUNK_COUNT_X + j, "done out of", CHUNK_COUNT_X*CHUNK_COUNT_Z);
+  } }
 
   console.log("sum triangles time", sumTriTime);
   console.log("sum all time", sumAllTime);
 
+  // fillChunk(0, 0);
   for (let i=0; i<CHUNK_COUNT_X; i++) {
     for (let j=0; j<CHUNK_COUNT_Z; j++) {
-      fillChunk(i, j);
-      console.log(i*CHUNK_COUNT_X + j, "done out of", CHUNK_COUNT_X*CHUNK_COUNT_Z);
-  }}
+  } }
+
 
   parseChunkMatrix();
   triangleCount = indices.length/3;
@@ -139,7 +142,7 @@ async function setChunk(sampler, chunkX, chunkZ) {
       // holds values from 0 to 255
       var pixel = sampler.sample_pixel(i + chunkX*CHUNK_SIZE, j + chunkZ*CHUNK_SIZE, 0, 1);
       heightsMask[(chunkX * CHUNK_COUNT_Z + chunkZ) * CHUNK_SIZE * CHUNK_SIZE + i * CHUNK_SIZE + j] = Math.round(pixel[0]);
-  }}
+  } }
 
   triTime = performance.now() - triTime;
 
@@ -154,9 +157,9 @@ async function setChunk(sampler, chunkX, chunkZ) {
       var yIndex = height % CHUNK_SIZE;
       var zIndex = j;
 
-      chunksMask[chunkX][chunkY][chunkZ][(xIndex * CHUNK_SIZE + zIndex) * CHUNK_SIZE + yIndex] = 1;
-      activeChunks[(chunkX * CHUNK_COUNT_Z + chunkZ) * CHUNK_COUNT_Y + chunkY] = 1;      
-  }} 
+      chunksMask[chunkX][chunkY][chunkZ][(xIndex * CHUNK_SIZE + yIndex) * CHUNK_SIZE + zIndex] = 1;
+      activeChunks[(chunkX * CHUNK_COUNT_Y + chunkY) * CHUNK_COUNT_Z + chunkZ] = 1;      
+  } } 
 
   allTime = performance.now() - allTime;
 
@@ -164,6 +167,7 @@ async function setChunk(sampler, chunkX, chunkZ) {
 }
 
 function fillChunk(chunkX, chunkZ) {
+
   for (let i = 0; i < 32; i++) {
     for (let j = 0; j < 32; j++) {
 
@@ -194,10 +198,10 @@ function fillChunk(chunkX, chunkZ) {
         var yIndex = (height-k) % CHUNK_SIZE;
         var chunkY = Math.floor((height-k)/CHUNK_SIZE);
         if (chunkY >= CHUNK_COUNT_Y) continue;
-        chunksMask[chunkX][chunkY][chunkZ][(xIndex * CHUNK_SIZE + zIndex) * CHUNK_SIZE + yIndex] = 1;
-        activeChunks[(chunkX * CHUNK_COUNT_Z + chunkZ) * CHUNK_COUNT_Y + chunkY] = 1;    
+        chunksMask[chunkX][chunkY][chunkZ][(xIndex * CHUNK_SIZE + yIndex) * CHUNK_SIZE + zIndex] = 1;
+        activeChunks[(chunkX * CHUNK_COUNT_Y + chunkY) * CHUNK_COUNT_Z + chunkZ] = 1;    
       }
-  }}
+  } }
 }
 
 
@@ -210,44 +214,44 @@ function setChunkBorders() {
     for (let j=0; j<CHUNK_COUNT_Y; j++) {
       for (let k=0; k<CHUNK_COUNT_Z; k++) {
 
-        if (activeChunks[(i * CHUNK_COUNT_Z + k) * CHUNK_COUNT_Y + j] == 1) {
+        if (activeChunks[(i * CHUNK_COUNT_Y + j) * CHUNK_COUNT_Z + k] == 1) {
           var res = setCubeWireFrame(CHUNK_SIZE*CUBE_SIZE, i*CHUNK_SIZE*CUBE_SIZE, j*CHUNK_SIZE*CUBE_SIZE, k*CHUNK_SIZE*CUBE_SIZE);
           chunkBordersIndices.push.apply (chunkBordersIndices,  res.indices.map(o => o+(chunkBordersVertices.length/3)));
           chunkBordersVertices.push.apply(chunkBordersVertices, res.vertices);
         }
-  }}}
+  } }}
 }
+
+// function parseChunkMatrix() {
+
+//   indices  = [];
+//   vertices = [];
+//   normals  = [];
+
+//   const c = CHUNK_SIZE*CUBE_SIZE;
+
+//   for (let i=0; i<CHUNK_COUNT_X; i++) {
+//     for (let j=0; j<CHUNK_COUNT_Y; j++) {
+//       for (let k=0; k<CHUNK_COUNT_Z; k++) {
+
+//         var arr = chunksMask[i][j][k];
+//         if (activeChunks[(i * CHUNK_COUNT_Y + j) * CHUNK_COUNT_Z + k] == 0) continue;
+
+//         for (let ii=0; ii<CHUNK_SIZE; ii++) {
+//           for (let jj=0; jj<CHUNK_SIZE; jj++) {
+//             for (let kk=0; kk<CHUNK_SIZE; kk++) {
+
+//               if (arr[(ii * CHUNK_SIZE + kk) * CHUNK_SIZE + jj] == 1) {
+//                 var ans = setCube(CUBE_SIZE, ii*CUBE_SIZE + i*c, jj*CUBE_SIZE + j*c, kk*CUBE_SIZE + k*c);
+//                 indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
+//                 vertices.push.apply(vertices, ans.vertices);
+//                 normals.push.apply (normals,  ans.normals);
+//               }
+//         } }}
+//   } }}
+// }
 
 function parseChunkMatrix() {
-
-  indices  = [];
-  vertices = [];
-  normals  = [];
-
-  const c = CHUNK_SIZE*CUBE_SIZE;
-
-  for (let i=0; i<CHUNK_COUNT_X; i++) {
-    for (let j=0; j<CHUNK_COUNT_Y; j++) {
-      for (let k=0; k<CHUNK_COUNT_Z; k++) {
-
-        var arr = chunksMask[i][j][k];
-        if (activeChunks[(i * CHUNK_COUNT_Z + k) * CHUNK_COUNT_Y + j] == 0) continue;
-
-        for (let ii=0; ii<CHUNK_SIZE; ii++) {
-          for (let jj=0; jj<CHUNK_SIZE; jj++) {
-            for (let kk=0; kk<CHUNK_SIZE; kk++) {
-
-              if (arr[(ii * CHUNK_SIZE + kk) * CHUNK_SIZE + jj] == 1) {
-                var ans = setCube(CUBE_SIZE, ii*CUBE_SIZE + i*c, jj*CUBE_SIZE + j*c, kk*CUBE_SIZE + k*c);
-                indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
-                vertices.push.apply(vertices, ans.vertices);
-                normals.push.apply (normals,  ans.normals);
-              }
-        }}}
-  }}}
-}
-
-function parseChunkMatrix2() {
 
   indices  = [];
   vertices = [];
@@ -261,81 +265,108 @@ function parseChunkMatrix2() {
       for (let k=0; k<CHUNK_COUNT_Z; k++) {
 
         var arr = chunksMask[i][j][k];
-        if (activeChunks[(i * CHUNK_COUNT_Z + k) * CHUNK_COUNT_Y + j] == 0) continue;
+        if (activeChunks[(i * CHUNK_COUNT_Y + j) * CHUNK_COUNT_Z + k] == 0) continue;
 
-        
-        for (let ii=0; ii<CHUNK_SIZE; ii++) {
-
-          if (ii > 1) continue;
-
-          // get the whole Y*Z 2D array
-          var subArray = arr.slice(ii*cc, (ii+1)*cc);
-
+        for (let kk=0; kk<CHUNK_SIZE; kk++) {
           for (let jj=0; jj<CHUNK_SIZE; jj++) {
 
-            
-            var t = parseInt(subArray.slice(jj*CHUNK_SIZE, (jj+1)*CHUNK_SIZE).join(''), 2);
+            var a = [];
+            for (let ii=0; ii<CHUNK_SIZE; ii++) {
+              a.push(arr[ii*cc + jj*CHUNK_SIZE + kk]);
+            }
+
+            var t = parseInt(a.join(''), 2);
             var t1 = ((t >>> 1) & (~t)) >>> 0;
             var t2 = ((t << 1) & (~t)) >>> 0;
 
-            // front to back
-            for (let kk=0; kk<CHUNK_SIZE; kk++) {
-              if ((t >> kk) & 1) {
-                var ans = leftFace(CUBE_SIZE, ii*CUBE_SIZE+ i*c, (CHUNK_SIZE-kk)*CUBE_SIZE + j*c, jj*CUBE_SIZE + k*c);
+            // left to right
+            for (let ii=0; ii<CHUNK_SIZE; ii++) {
+
+              if ((t1 >> ii) & 1) {
+                var ans = rightFace(CUBE_SIZE, (CHUNK_SIZE-ii-2)*CUBE_SIZE + i*c, (jj+1)*CUBE_SIZE + j*c, kk*CUBE_SIZE + k*c);
                 indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
                 vertices.push.apply(vertices, ans.vertices);
                 normals.push.apply (normals,  ans.normals);
               } 
 
-              if ((t >> kk) & 1) {
-                var ans = rightFace(CUBE_SIZE, ii*CUBE_SIZE+ i*c, (CHUNK_SIZE-kk)*CUBE_SIZE + j*c, jj*CUBE_SIZE + k*c);
+              if ((t2 >> ii) & 1) {
+                var ans = leftFace(CUBE_SIZE, (CHUNK_SIZE-ii)*CUBE_SIZE+ i*c, (jj+1)*CUBE_SIZE + j*c, kk*CUBE_SIZE + k*c);
                 indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
                 vertices.push.apply(vertices, ans.vertices);
                 normals.push.apply (normals,  ans.normals);
               }
-            }
-          }
-        }
 
+              if (ii==0) {
+                if (arr[(ii*CHUNK_SIZE + jj) * CHUNK_SIZE + kk] == 1) {
+                  var ans = leftFace(CUBE_SIZE, (CHUNK_SIZE-ii)*CUBE_SIZE+ (i-1)*c, (jj+1)*CUBE_SIZE + j*c, kk*CUBE_SIZE + k*c);
+                  indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
+                  vertices.push.apply(vertices, ans.vertices);
+                  normals.push.apply (normals,  ans.normals);
+              } }
+
+              if (ii==CHUNK_SIZE-1) {
+                if (arr[(ii*CHUNK_SIZE + jj) * CHUNK_SIZE + kk] == 1) {
+                  var ans = rightFace(CUBE_SIZE, (CHUNK_SIZE-ii-2)*CUBE_SIZE + (i+1)*c, (jj+1)*CUBE_SIZE + j*c, kk*CUBE_SIZE + k*c);
+                  indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
+                  vertices.push.apply(vertices, ans.vertices);
+                  normals.push.apply (normals,  ans.normals);
+              } }
+            }
+        } }
 
         for (let ii=0; ii<CHUNK_SIZE; ii++) {
-          
           for (let kk=0; kk<CHUNK_SIZE; kk++) {
 
             var a = [];
             for (let jj=0; jj<CHUNK_SIZE; jj++) {
-              a.push(arr[ii*CHUNK_SIZE*CHUNK_SIZE + jj*CHUNK_SIZE + kk]);
+              a.push(arr[ii*cc + jj*CHUNK_SIZE + kk]);
             }
+
             var t = parseInt(a.join(''), 2);
             var t1 = ((t >>> 1) & (~t)) >>> 0;
             var t2 = ((t << 1) & (~t)) >>> 0;
-  
-            // front to back
+
+            // top to bottom
             for (let jj=0; jj<CHUNK_SIZE; jj++) {
-              if ((t >> jj) & 1) {
-                var ans = topFace(CUBE_SIZE, ii*CUBE_SIZE+ i*c, (kk+1)*CUBE_SIZE + j*c, (CHUNK_SIZE-jj-1)*CUBE_SIZE + k*c);
+
+              if ((t1 >> jj) & 1) {
+                var ans = topFace(CUBE_SIZE, ii*CUBE_SIZE + i*c, (CHUNK_SIZE-jj-1)*CUBE_SIZE + j*c, kk*CUBE_SIZE + k*c);
                 indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
                 vertices.push.apply(vertices, ans.vertices);
                 normals.push.apply (normals,  ans.normals);
               }
-  
-              if ((t >> jj) & 1) {
-                var ans = bottomFace(CUBE_SIZE, ii*CUBE_SIZE+ i*c, (kk+1)*CUBE_SIZE + j*c, (CHUNK_SIZE-jj-1)*CUBE_SIZE + k*c);
+
+              if ((t2 >> jj) & 1) {
+                var ans = bottomFace(CUBE_SIZE, ii*CUBE_SIZE+ i*c, (CHUNK_SIZE-jj+1)*CUBE_SIZE + j*c, kk*CUBE_SIZE + k*c);
                 indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
                 vertices.push.apply(vertices, ans.vertices);
                 normals.push.apply (normals,  ans.normals);
               }
+
+              if (jj==CHUNK_SIZE-1) {
+                if (arr[(ii*CHUNK_SIZE + jj) * CHUNK_SIZE + kk] == 1) {
+                  var ans = topFace(CUBE_SIZE, ii*CUBE_SIZE + i*c, (CHUNK_SIZE-jj-1)*CUBE_SIZE + (j+1)*c, kk*CUBE_SIZE + k*c);
+                  indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
+                  vertices.push.apply(vertices, ans.vertices);
+                  normals.push.apply (normals,  ans.normals);
+              } }
+
+              if (jj==0) {
+                if (arr[(ii*CHUNK_SIZE + jj) * CHUNK_SIZE + kk] == 1) {
+                  var ans = bottomFace(CUBE_SIZE, ii*CUBE_SIZE+ i*c, (CHUNK_SIZE-jj+1)*CUBE_SIZE + (j-1)*c, kk*CUBE_SIZE + k*c);
+                  indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
+                  vertices.push.apply(vertices, ans.vertices);
+                  normals.push.apply (normals,  ans.normals);
+              } }
             }
-          }
-        }
+        } }
 
-        for (let kk=0; kk<CHUNK_SIZE; kk++) {
-
+        for (let ii=0; ii<CHUNK_SIZE; ii++) {
           for (let jj=0; jj<CHUNK_SIZE; jj++) {
             
             var a =[];
-            for (let ii=0; ii<CHUNK_SIZE; ii++)  {
-              a.push(arr[ii*CHUNK_SIZE*CHUNK_SIZE + jj*CHUNK_SIZE + kk]);
+            for (let kk=0; kk<CHUNK_SIZE; kk++)  {
+              a.push(arr[ii*cc + jj*CHUNK_SIZE + kk]);
             }
 
             var t = parseInt(a.join(''), 2);
@@ -343,40 +374,40 @@ function parseChunkMatrix2() {
             var t2 = ((t << 1) & (~t)) >>> 0;
 
             // front to back
-            for (let ii=0; ii<CHUNK_SIZE; ii++) {
-              if ((t >> ii) & 1) {
-                var ans = frontFace(CUBE_SIZE, (CHUNK_SIZE-ii-1)*CUBE_SIZE+ i*c, (kk+1)*CUBE_SIZE + j*c, jj*CUBE_SIZE + k*c);
+            for (let kk=0; kk<CHUNK_SIZE; kk++) {
+
+              if ((t2 >> kk) & 1) {
+                var ans = frontFace(CUBE_SIZE, (ii)*CUBE_SIZE+ i*c, (jj+1)*CUBE_SIZE + j*c, (CHUNK_SIZE-kk-1)*CUBE_SIZE + k*c);
                 indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
                 vertices.push.apply(vertices, ans.vertices);
                 normals.push.apply (normals,  ans.normals);
               }
 
-              if ((t >> ii) & 1) {
-                var ans = backFace(CUBE_SIZE, (CHUNK_SIZE-ii-1)*CUBE_SIZE+ i*c, (kk+1)*CUBE_SIZE + j*c, jj*CUBE_SIZE + k*c);
+              if ((t1 >> kk) & 1) {
+                var ans = backFace(CUBE_SIZE, (ii)*CUBE_SIZE+ i*c, (jj+1)*CUBE_SIZE + j*c, (CHUNK_SIZE-kk-1)*CUBE_SIZE + k*c);
                 indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
                 vertices.push.apply(vertices, ans.vertices);
                 normals.push.apply (normals,  ans.normals);
               }
+
+              if (kk==0) {
+                if (arr[(ii*CHUNK_SIZE + jj) * CHUNK_SIZE + kk] == 1) {
+                  var ans = frontFace(CUBE_SIZE, (ii)*CUBE_SIZE+ i*c, (jj+1)*CUBE_SIZE + j*c, (CHUNK_SIZE-kk-1)*CUBE_SIZE + (k-1)*c);
+                  indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
+                  vertices.push.apply(vertices, ans.vertices);
+                  normals.push.apply (normals,  ans.normals);
+              } }
+
+              if (kk==CHUNK_SIZE-1) {
+                if (arr[(ii*CHUNK_SIZE + jj) * CHUNK_SIZE + kk] == 1) {
+                  var ans = backFace(CUBE_SIZE, (ii)*CUBE_SIZE+ i*c, (jj+1)*CUBE_SIZE + j*c, (CHUNK_SIZE-kk-1)*CUBE_SIZE + (k+1)*c);
+                  indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
+                  vertices.push.apply(vertices, ans.vertices);
+                  normals.push.apply (normals,  ans.normals);
+              } }
             }
-          }
-        }
-      }
-    }
-  }
+        } }
+  } } }
 }
 
-
 export { bindTerrain, initTerrain, setChunkBorders, getTerrainInfo, getChunksInfo, initChunkBorders, bindChunkBorders };
-
-// queue of chunks [[], [], [], [], [], [], [], []] that get sent to vertices, indices according to some algo
-
- 
-
-/*
-
-generate perlin noise terrain setChunk (buffer of chunks positions to generate)
-compress (buffer of things to compress)
-triangles, uncompress (buffer of things to uncompress to triangles)
-chunk manager (buffer of chunks to load)
-
-*/
