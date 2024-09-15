@@ -3,6 +3,8 @@ function backFace(cubeSize, x, y, z) {
   return {
     indices:
       [0, 1, 2, 0, 2, 3],
+    wireframe:
+      [0,1, 1,2, 2,0, 0,2, 2,3],
     normals:
       [0, 0, -1,
         0, 0, -1,
@@ -23,6 +25,8 @@ function frontFace(cubeSize, x, y, z) {
   return {
     indices:
       [0, 1, 2, 0, 2, 3],
+    wireframe:
+      [0,1, 1,2, 2,0, 0,2, 2,3],
     normals:
       [0, 0, 1,
         0, 0, 1,
@@ -30,10 +34,10 @@ function frontFace(cubeSize, x, y, z) {
         0, 0, 1],
     vertices:
       [
-        x, y + cubeSize, z + cubeSize,
-        x, y, z + cubeSize,
-        x + cubeSize, y, z + cubeSize,
-        x + cubeSize, y + cubeSize, z + cubeSize,
+        x, y + cubeSize, z,
+        x, y, z,
+        x + cubeSize, y, z,
+        x + cubeSize, y + cubeSize, z,
       ]
   }
 }
@@ -43,6 +47,8 @@ function leftFace(cubeSize, x, y, z) {
   return {
     indices:
       [0, 1, 2, 1, 3, 2],
+    wireframe:
+      [0,1, 1,2, 2,1, 1,3, 3,2],
     normals:
       [-1, 0, 0,
       -1, 0, 0,
@@ -63,6 +69,8 @@ function rightFace(cubeSize, x, y, z) {
   return {
     indices:
       [0, 1, 2, 1, 3, 2],
+    wireframe:
+      [0,1, 1,2, 2,1, 1,3, 3,2],
     normals:
       [1, 0, 0,
         1, 0, 0,
@@ -70,10 +78,10 @@ function rightFace(cubeSize, x, y, z) {
         1, 0, 0],
     vertices:
       [
-        x + cubeSize, y, z,
-        x + cubeSize, y + cubeSize, z,
-        x + cubeSize, y, z + cubeSize,
-        x + cubeSize, y + cubeSize, z + cubeSize,
+        x, y, z,
+        x, y + cubeSize, z,
+        x, y, z + cubeSize,
+        x, y + cubeSize, z + cubeSize,
       ]
   }
 }
@@ -83,6 +91,8 @@ function topFace(cubeSize, x, y, z) {
   return {
     indices:
       [0, 1, 2, 1, 3, 2],
+    wireframe:
+      [0,1, 1,2, 2,1, 1,3, 3,2],
     normals:
       [0, 1, 0,
         0, 1, 0,
@@ -90,10 +100,10 @@ function topFace(cubeSize, x, y, z) {
         0, 1, 0],
     vertices:
       [
-        x, y + cubeSize, z,
-        x, y + cubeSize, z + cubeSize,
-        x + cubeSize, y + cubeSize, z,
-        x + cubeSize, y + cubeSize, z + cubeSize,
+        x, y, z,
+        x, y, z + cubeSize,
+        x + cubeSize, y, z,
+        x + cubeSize, y, z + cubeSize,
       ]
   }
 }
@@ -103,6 +113,8 @@ function bottomFace(cubeSize, x, y, z) {
   return {
     indices:
       [0, 1, 2, 1, 3, 2],
+    wireframe:
+      [0,1, 1,2, 2,1, 1,3, 3,2],
     normals:
       [0, -1, 0,
         0, -1, 0,

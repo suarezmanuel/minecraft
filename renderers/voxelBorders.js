@@ -1,6 +1,6 @@
 import { m4 } from "../utils/math.js"
 import { createProgramFromFiles } from "../utils/shaderLoader.js"
-import { initChunkBorders, bindChunkBorders, getChunksInfo } from "../utils/terrain.js"
+import { initVoxelWireframe, bindVoxelWireframe, getVoxelWireframeInfo } from "../utils/terrain.js"
 
 "use strict";
 
@@ -8,19 +8,19 @@ var positionLocation;
 var colorLocation;
 var viewMatrixProjectionLocation;
 
-var chunkVertexBuffer;
-var chunkIndexBuffer;
+var voxelWireframeVertexBuffer;
+var voxelWireframeIndexBuffer;
 
-var chunksInfo;
+var info;
 
 async function initParams(gl, program) {
   setGLParameters(gl, program);
-  initChunkBorders();
-  chunksInfo = getChunksInfo();
+  initVoxelWireframe();
+  info = getVoxelWireframeInfo();
 }
 
 function bindParams(gl) {
-  ({chunkVertexBuffer, chunkIndexBuffer} = bindChunkBorders(gl, {chunkVertexBuffer, chunkIndexBuffer}));
+  ({voxelWireframeVertexBuffer, voxelWireframeIndexBuffer} = bindVoxelWireframe(gl, {voxelWireframeVertexBuffer, voxelWireframeIndexBuffer}));
 }
 
 // set uniforms, attributes, ... etc
@@ -38,7 +38,7 @@ function render(gl, fieldOfViewRadians, zNear, zFar, camera) {
   gl.enableVertexAttribArray(positionLocation);
 
   // Bind the position buffer.
-  gl.bindBuffer(gl.ARRAY_BUFFER, chunkVertexBuffer);
+  gl.bindBuffer(gl.ARRAY_BUFFER, voxelWireframeVertexBuffer);
 
   // Tell the position attribute how to get data out of chunkVertexBuffer (ARRAY_BUFFER)
   var size = 3;          // 3 components per iteration
@@ -75,10 +75,10 @@ function render(gl, fieldOfViewRadians, zNear, zFar, camera) {
   gl.uniform4fv(colorLocation, [1, 0.8, 0, 1]);
   // gl.uniform4fv(colorLocation, [0.2, 1, 0.2, 1]);
 
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, chunkIndexBuffer);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, voxelWireframeIndexBuffer);
 
   var primitiveType = gl.LINES;
-  var count = chunksInfo.chunkBordersIndicesLength;
+  var count = info.voxelWireframeIndexLength;
   var type = gl.UNSIGNED_INT;
   var offset = 0;
   gl.drawElements(primitiveType, count, type, offset);

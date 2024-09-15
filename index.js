@@ -10,6 +10,10 @@ import { initParams as initCrosshairParams,
          render as renderCrosshair,
          createProgram as createCrosshairProgram } from "./renderers/crosshair.js"
          
+import { initParams as initVoxelWireframesParams,
+         bindParams as bindVoxelWireframesParams,
+         render as renderVoxelWireframes,
+         createProgram as createVoxelWireframesProgram } from "./renderers/voxelBorders.js"
 
 "use strict";
 
@@ -17,7 +21,7 @@ var camera = {pos: [0,0,0], up: [0,1,0], forward: [0,0,1], right: [1,0,0], yaw: 
 
 var lookSpeed = 5;
 var fieldOfViewRadians = degToRad(60);
-var zNear = 1;
+var zNear = 100;
 var zFar = 100000;
 
 // mouse
@@ -26,9 +30,10 @@ var dy = 0;
 
 var keys = []
 // speeds[index]
-var speeds = [1, 5, 10, 20, 50];
+var speeds = [1, 5, 10, 20, 50, 100, 250, 500];
 var index = 0;
 var showChunks = false;
+var showVoxelWireframes = false;
 
 var fps = 0;
 var sumFrameTimes = 0;
@@ -81,13 +86,14 @@ async function main() {
   // init programs ###############################
 
   var program = await createProgram(gl);
-
   await initParams(gl, program);
 
   var chunkProgram = await createChunkBordersProgram(gl);
-  
   initChunkBordersParams(gl, chunkProgram);
   
+  var voxelWireframesProgram = await createVoxelWireframesProgram(gl);
+  initVoxelWireframesParams(gl, voxelWireframesProgram);
+
   var crosshairProgram = await createCrosshairProgram(gl);
 
   initCrosshairParams(gl, crosshairProgram);
@@ -106,7 +112,7 @@ async function main() {
 
   // Turn on culling. By default backfacing triangles
   // will be culled.
-  // gl.enable(gl.CULL_FACE);
+  gl.enable(gl.CULL_FACE);
 
   // Enable the depth buffer
   gl.enable(gl.DEPTH_TEST);
@@ -138,6 +144,12 @@ async function main() {
         gl.useProgram(chunkProgram);
         bindChunkBordersParams(gl, chunkProgram)
         renderChunkBorders(gl, fieldOfViewRadians, zNear, zFar, camera);
+      }
+
+      if (showVoxelWireframes) {
+        gl.useProgram(voxelWireframesProgram);
+        bindVoxelWireframesParams(gl, voxelWireframesProgram)
+        renderVoxelWireframes(gl, fieldOfViewRadians, zNear, zFar, camera);
       }
       
       gl.useProgram(crosshairProgram);
@@ -283,6 +295,11 @@ function addInputInterval() {
     if (keys['-']) {
       keys['-'] = false;
       showChunks = !showChunks;
+    }
+
+    if (keys['0']) {
+      keys['0'] = false;
+      showVoxelWireframes = !showVoxelWireframes;
     }
 
     camera.pos = [Math.round(camera.pos[0]), Math.round(camera.pos[1]), Math.round(camera.pos[2])]

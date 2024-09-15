@@ -119,7 +119,6 @@ function fillGUIRenderer(gl) {
   var valueChanged = false;
 
   try {
-
     // map    ####
     ImGui.Text(`map size:  ${terrainInfo.cubeCountX * terrainInfo.cubeCountY}`);
     ImGui.Text(`vertices:  ${(2 * terrainInfo.indicesLength / 3).toLocaleString()}`);
