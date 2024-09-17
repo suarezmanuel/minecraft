@@ -1,4 +1,4 @@
-import { setCube, setCubeWireFrame, leftFace, rightFace, bottomFace, topFace, frontFace, backFace } from "./geometry.js"
+import { setCube, setCubeWireFrame, leftFace, rightFace, bottomFace, topFace, topFaceStretch, frontFace, backFace } from "./geometry.js"
 
 var CUBE_SIZE = 20;
 var cubeCountX = 16;
@@ -225,7 +225,6 @@ function parseChunk(arr, i, k, lodFactor) {
 
   for (let j=0; j<CHUNK_COUNT_Y; j++) {
 
-    // if (j!=4) continue;
     if (activeChunks[(i*CHUNK_COUNT_Y + j) * CHUNK_COUNT_Z + k] == 0) continue;
 
     for (let kk=0; kk<chunkSize; kk++) {
@@ -279,11 +278,83 @@ function parseChunk(arr, i, k, lodFactor) {
         }
     } }
 
-    // for (let ii=0; ii<chunkSize; ii++) {
-    //   for (let kk=0; kk<chunkSize; kk++) {
+   var t1m = new Uint8Array(chunkSize*chunkSize*chunkSize).fill(0);
+    var t2m = new Uint8Array(chunkSize*chunkSize*chunkSize).fill(0);
 
+    for (let ii=0; ii<chunkSize; ii++) {
+      for (let kk=0; kk<chunkSize; kk++) {
+        
+        var a = [];
+
+        for (let jj=0; jj<chunkSize; jj++) {
+          a.push(arr[(ii*cc + jj*chunkSize + kk) + j*chunkSize*chunkSize*chunkSize]);
+        }
+
+        var t = parseInt(a.join(''), 2);
+        var t1 = ((t >>> 1) & (~t)) >>> 0;
+        var t2 = ((t << 1) & (~t)) >>> 0;
+
+        var t1v = t1.toString(2).padStart(chunkSize, '0').split('');
+        var t2v = t2.toString(2).padStart(chunkSize, '0').split('');
+
+        for (let jj=0; jj<chunkSize; jj++) {
+
+          var index = (ii * chunkSize + jj) * chunkSize + kk;
+          t1m[index] = t1v[jj];
+          t2m[index] = t2v[jj];
+        }
+      }
+    }
+
+    for (let jj=0; jj<chunkSize; jj++) {
+      for (let ii=0; ii<chunkSize; ii++) {
+        for (let kk=0; kk<chunkSize; kk++) {
+
+          var index = (ii * chunkSize + jj) * chunkSize + kk;
+          if (t1m[index] == 1) {
+            var ans = topFace(cubeSize, ii*cubeSize + i*c, (jj)*cubeSize + j*c, kk*cubeSize + k*c);
+            indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
+            voxelBordersIndices.push.apply (voxelBordersIndices, ans.wireframe.map(o=>o+vertices.length/3));
+            vertices.push.apply(vertices, ans.vertices);
+            normals.push.apply (normals,  ans.normals);
+          }
+
+          if (t2m[index] == 1) {
+            var ans = bottomFace(cubeSize, ii*cubeSize+ i*c, (jj+1)*cubeSize + j*c, kk*cubeSize + k*c);
+            indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
+            voxelBordersIndices.push.apply (voxelBordersIndices, ans.wireframe.map(o=>o+vertices.length/3));
+            vertices.push.apply(vertices, ans.vertices);
+            normals.push.apply (normals,  ans.normals);
+          }
+
+          if (jj==chunkSize-1) {
+            if (arr[((ii*chunkSize + jj) * chunkSize + kk) + j*chunkSize*chunkSize*chunkSize] == 1) {
+              var ans = topFace(cubeSize, ii*cubeSize + i*c, (jj+1)*cubeSize + j*c, kk*cubeSize + k*c);
+              indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
+              voxelBordersIndices.push.apply (voxelBordersIndices, ans.wireframe.map(o=>o+vertices.length/3));
+              vertices.push.apply(vertices, ans.vertices);
+              normals.push.apply (normals,  ans.normals);
+          } }
+
+          if (jj==0) {
+            if (arr[((ii*chunkSize + jj) * chunkSize + kk) + j*chunkSize*chunkSize*chunkSize] == 1) {
+                  var ans = bottomFace(cubeSize, ii*cubeSize+ i*c, (jj)*cubeSize + j*c, kk*cubeSize + k*c);
+            indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
+            voxelBordersIndices.push.apply (voxelBordersIndices, ans.wireframe.map(o=>o+vertices.length/3));
+            vertices.push.apply(vertices, ans.vertices);
+            normals.push.apply (normals,  ans.normals);
+          } }
+    } } }
+
+    // var t1m = new Uint8Array(chunkSize*chunkSize*chunkSize).fill(0);
+    // var t2m = new Uint8Array(chunkSize*chunkSize*chunkSize).fill(0);
+
+    // for (let jj=0; jj<chunkSize; jj++) {
+    //   for (let kk=0; kk<chunkSize; kk++) {
+        
     //     var a = [];
-    //     for (let jj=0; jj<chunkSize; jj++) {
+
+    //     for (let ii=0; ii<chunkSize; ii++) {
     //       a.push(arr[(ii*cc + jj*chunkSize + kk) + j*chunkSize*chunkSize*chunkSize]);
     //     }
 
@@ -291,101 +362,93 @@ function parseChunk(arr, i, k, lodFactor) {
     //     var t1 = ((t >>> 1) & (~t)) >>> 0;
     //     var t2 = ((t << 1) & (~t)) >>> 0;
 
-    //     // top to bottom
-    //     for (let jj=0; jj<chunkSize; jj++) {
+    //     var t1v = t1.toString(2).padStart(chunkSize, '0').split('');
+    //     var t2v = t2.toString(2).padStart(chunkSize, '0').split('');
 
-    //       if ((t1 >> jj) & 1) {
-    //         var ans = topFace(cubeSize, ii*cubeSize + i*c, (chunkSize-jj-1)*cubeSize + j*c, kk*cubeSize + k*c);
-    //         indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
-    //         voxelBordersIndices.push.apply (voxelBordersIndices, ans.wireframe.map(o=>o+vertices.length/3));
-    //         vertices.push.apply(vertices, ans.vertices);
-    //         normals.push.apply (normals,  ans.normals);
-    //       }
+    //     for (let ii=0; ii<chunkSize; ii++) {
+    //       var index = (ii * chunkSize + jj) * chunkSize + kk;
+    //       t1m[index] = t1v[ii];
+    //       t2m[index] = t2v[ii];
+  
+    //       // if (jj==chunkSize-1 && arr[((ii)*cc + (jj)*chunkSize + kk) + j*chunkSize*chunkSize*chunkSize]==1) {
+    //       //   t1m[((jj) * chunkSize + (ii-1)) * chunkSize + (kk)] = 1;
+    //       // }
 
-    //       if ((t2 >> jj) & 1) {
-    //         var ans = bottomFace(cubeSize, ii*cubeSize+ i*c, (chunkSize-jj)*cubeSize + j*c, kk*cubeSize + k*c);
-    //         indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
-    //         voxelBordersIndices.push.apply (voxelBordersIndices, ans.wireframe.map(o=>o+vertices.length/3));
-    //         vertices.push.apply(vertices, ans.vertices);
-    //         normals.push.apply (normals,  ans.normals);
-    //       }
-
-    //       if (jj==chunkSize-1) {
-    //         if (arr[((ii*chunkSize + jj) * chunkSize + kk) + j*chunkSize*chunkSize*chunkSize] == 1) {
-    //           var ans = topFace(cubeSize, ii*cubeSize + i*c, (chunkSize-jj-1)*cubeSize + (j+1)*c, kk*cubeSize + k*c);
-    //           indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
-    //           voxelBordersIndices.push.apply (voxelBordersIndices, ans.wireframe.map(o=>o+vertices.length/3));
-    //           vertices.push.apply(vertices, ans.vertices);
-    //           normals.push.apply (normals,  ans.normals);
-    //       } }
-
-    //       if (jj==0) {
-    //         if (arr[((ii*chunkSize + jj) * chunkSize + kk) + j*chunkSize*chunkSize*chunkSize] == 1) {
-    //           var ans = bottomFace(cubeSize, ii*cubeSize+ i*c, (chunkSize-jj)*cubeSize + (j-1)*c, kk*cubeSize + k*c);
-    //           indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
-    //           voxelBordersIndices.push.apply (voxelBordersIndices, ans.wireframe.map(o=>o+vertices.length/3));
-    //           vertices.push.apply(vertices, ans.vertices);
-    //           normals.push.apply (normals,  ans.normals);
-    //       } }
+    //       // if (jj==0 && arr[((ii)*cc + (jj)*chunkSize + kk) + j*chunkSize*chunkSize*chunkSize]==1) {
+    //       //   t1m[((jj) * chunkSize + (ii-1)) * chunkSize + (kk)] = 1;
+    //       // }
     //     }
-    // } }
+    //   }
+    // }
 
-    for (let jj=0; jj<chunkSize; jj++) {
+    // // slice height
+    // for (let jj=0; jj<chunkSize; jj++) {
 
-      var a = [];
+    //   // if (jj != 0) continue;
+    //   // t1 matrix decomposition into columns
+    //   var t1mDec = [];
+    //   for (let w=0; w<chunkSize; w++) {
+    //     t1mDec.push(t1m.slice(jj*chunkSize*chunkSize + w*chunkSize, jj*chunkSize*chunkSize + (w+1)*chunkSize).join(''));
+    //   }
 
-      for (let ii=0; ii<chunkSize; ii++) {
-        for (let kk=0; kk<chunkSize; kk++) {
-          a.push(arr[(ii*cc + jj*chunkSize + kk) + j*chunkSize*chunkSize*chunkSize]);
-        }
-      }
+    //   // column
+    //   for (let ii=0; ii<chunkSize; ii++) {
 
-      for (let m=0; m<chunkSize; m++) {
+    //     // notice we don't zero this in the while loop
+    //     var consecutiveZeroes = 0;
 
-        var t = parseInt(a.slice(m*chunkSize, (m+1)*chunkSize).join(''), 2);
-        var t1 = ((t >>> 1) & (~t)) >>> 0;
-        var t2 = ((t << 1) & (~t)) >>> 0;
+    //     // for every column handle all faces, turn all ones to zeroes
+    //     while (consecutiveZeroes != chunkSize) {
 
-        // top to bottom
-        for (let w=0; w<chunkSize; w++) {
+    //       var mask     = parseInt(t1mDec[ii], 2);
+    //       var nextMask = parseInt(t1mDec[ii+1], 2);
 
-          if ((t1 >> w) & 1) {
-            var ans = topFace(cubeSize, ii*cubeSize + i*c, (chunkSize-jj-1)*cubeSize + j*c, kk*cubeSize + k*c);
-            indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
-            voxelBordersIndices.push.apply (voxelBordersIndices, ans.wireframe.map(o=>o+vertices.length/3));
-            vertices.push.apply(vertices, ans.vertices);
-            normals.push.apply (normals,  ans.normals);
-          }
+    //       // count consecutive zeroes
+    //       var temp = ~mask >>> 0;
+    //       while ((temp & 1 ) == 1) {
+    //         consecutiveZeroes++;
+    //         temp = temp >>> 1;
+    //       }
 
-          if ((t2 >> w) & 1) {
-            var ans = bottomFace(cubeSize, ii*cubeSize+ i*c, (chunkSize-jj)*cubeSize + j*c, kk*cubeSize + k*c);
-            indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
-            voxelBordersIndices.push.apply (voxelBordersIndices, ans.wireframe.map(o=>o+vertices.length/3));
-            vertices.push.apply(vertices, ans.vertices);
-            normals.push.apply (normals,  ans.normals);
-          }
+    //       if (consecutiveZeroes == chunkSize) { consecutiveZeroes = 0; break; }
 
-          if (w==chunkSize-1) {
-            if (arr[((ii*chunkSize + jj) * chunkSize + kk) + j*chunkSize*chunkSize*chunkSize] == 1) {
-              var ans = topFace(cubeSize, ii*cubeSize + i*c, (chunkSize-jj-1)*cubeSize + (j+1)*c, kk*cubeSize + k*c);
-              indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
-              voxelBordersIndices.push.apply (voxelBordersIndices, ans.wireframe.map(o=>o+vertices.length/3));
-              vertices.push.apply(vertices, ans.vertices);
-              normals.push.apply (normals,  ans.normals);
-          } }
+    //       // count consecutive ones
+    //       temp = (mask >>> consecutiveZeroes);
+    //       var consecutiveOnes = 0;
+    //       while ((temp & 1 ) == 1) {
+    //         consecutiveOnes++;
+    //         temp = temp >>> 1;
+    //       }
 
-          if (w==0) {
-            if (arr[((ii*chunkSize + jj) * chunkSize + kk) + j*chunkSize*chunkSize*chunkSize] == 1) {
-              var ans = bottomFace(cubeSize, ii*cubeSize+ i*c, (chunkSize-jj)*cubeSize + (j-1)*c, kk*cubeSize + k*c);
-              indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
-              voxelBordersIndices.push.apply (voxelBordersIndices, ans.wireframe.map(o=>o+vertices.length/3));
-              vertices.push.apply(vertices, ans.vertices);
-              normals.push.apply (normals,  ans.normals);
-          } }
-        }
-      }
-    }
+    //       // mask of merged walls
+    //       var compare = (((1 << consecutiveOnes)-1) << consecutiveZeroes) >>> 0;
 
+    //       t1mDec[ii] = ((mask & (~compare)) >>> 0).toString(2).padStart(chunkSize, 0);
+
+    //       var matchesCount = 0;
+
+    //       while (ii != chunkSize-1 && (compare & nextMask) == compare) {
+    //         matchesCount++;
+    //         // zero the next match
+    //         t1mDec[ii+matchesCount] = ((nextMask & (~compare)) >>> 0).toString(2).padStart(chunkSize, 0);
+    //         // we wont expand further if we are at the chunk's end
+    //         nextMask = parseInt(t1mDec[ii+matchesCount+1], 2);
+    //       }
+
+    //       // create extended triangle
+    //       // consecutive zeroes is the Z start, consecutive ones is the height at Z, matchesCount+1 is the width at X
+    //       var ans = topFaceStretch(consecutiveOnes*cubeSize, (matchesCount+1)*cubeSize, (jj-1)*cubeSize + i*c, (ii+1)*cubeSize + j*c, (chunkSize-consecutiveOnes-consecutiveZeroes)*cubeSize + k*c);
+    //       indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
+    //       voxelBordersIndices.push.apply (voxelBordersIndices, ans.wireframe.map(o=>o+vertices.length/3));
+    //       vertices.push.apply(vertices, ans.vertices);
+    //       normals.push.apply (normals,  ans.normals);
+
+    //       consecutiveZeroes = 0;
+    //     }
+    //   }
+    // }
+
+  
     for (let ii=0; ii<chunkSize; ii++) {
       for (let jj=0; jj<chunkSize; jj++) {
         

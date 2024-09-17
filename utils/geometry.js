@@ -108,6 +108,29 @@ function topFace(cubeSize, x, y, z) {
   }
 }
 
+// length is in the Z axis, height in the X axis
+function topFaceStretch(length, height, x, y, z) {
+
+  return {
+    indices:
+      [0, 1, 2, 1, 3, 2],
+    wireframe:
+      [0,1, 1,2, 2,1, 1,3, 3,2],
+    normals:
+      [0, 1, 0,
+        0, 1, 0,
+        0, 1, 0,
+        0, 1, 0],
+    vertices:
+      [
+        x, y, z,
+        x, y, z + length,
+        x + height, y, z,
+        x + height, y, z + length,
+      ]
+  }
+}
+
 function bottomFace(cubeSize, x, y, z) {
 
   return {
@@ -228,4 +251,4 @@ function setCubeWireFrame(cubeSize, x, y, z) {
   }
 }
 
-export { backFace, frontFace, leftFace, rightFace, topFace, bottomFace, setCube, setCubeWireFrame };
+export { backFace, frontFace, leftFace, rightFace, topFace, topFaceStretch, bottomFace, setCube, setCubeWireFrame };
