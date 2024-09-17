@@ -5,9 +5,9 @@ var cubeCountX = 16;
 var cubeCountY = 16;
 var triangleCount = 0;
 
-var CHUNK_COUNT_X = 1;
+var CHUNK_COUNT_X = 20;
 var CHUNK_COUNT_Y = 7;
-var CHUNK_COUNT_Z = 1;
+var CHUNK_COUNT_Z = 20;
 var CHUNK_SIZE = 32;
 
 var indices = [];
