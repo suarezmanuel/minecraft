@@ -20,6 +20,28 @@ function backFace(cubeSize, x, y, z) {
   }
 }
 
+function backFaceStretch(length, height, x, y, z) {
+
+  return {
+    indices:
+      [0, 1, 2, 0, 2, 3],
+    wireframe:
+      [0,1, 1,2, 2,0, 0,2, 2,3],
+    normals:
+      [0, 0, -1,
+        0, 0, -1,
+        0, 0, -1,
+        0, 0, -1],
+    vertices:
+      [
+        x + height, y + length, z,
+        x + height, y, z,
+        x, y, z,
+        x, y + length, z
+      ]
+  }
+}
+
 function frontFace(cubeSize, x, y, z) {
 
   return {
@@ -38,6 +60,28 @@ function frontFace(cubeSize, x, y, z) {
         x, y, z,
         x + cubeSize, y, z,
         x + cubeSize, y + cubeSize, z,
+      ]
+  }
+}
+
+function frontFaceStretch(length, height, x, y, z) {
+
+  return {
+    indices:
+      [0, 1, 2, 0, 2, 3],
+    wireframe:
+      [0,1, 1,2, 2,0, 0,2, 2,3],
+    normals:
+      [0, 0, 1,
+        0, 0, 1,
+        0, 0, 1,
+        0, 0, 1],
+    vertices:
+      [
+        x, y + length, z,
+        x, y, z,
+        x + height, y, z,
+        x + height, y + length, z,
       ]
   }
 }
@@ -64,6 +108,28 @@ function leftFace(cubeSize, x, y, z) {
   }
 }
 
+function leftFaceStretch(length, height, x, y, z) {
+
+  return {
+    indices:
+      [0, 1, 2, 1, 3, 2],
+    wireframe:
+      [0,1, 1,2, 2,1, 1,3, 3,2],
+    normals:
+      [-1, 0, 0,
+      -1, 0, 0,
+      -1, 0, 0,
+      -1, 0, 0],
+    vertices:
+      [
+        x, y, z,
+        x, y, z + length,
+        x, y + height, z,
+        x, y + height, z + length,
+      ]
+  }
+}
+
 function rightFace(cubeSize, x, y, z) {
 
   return {
@@ -82,6 +148,28 @@ function rightFace(cubeSize, x, y, z) {
         x, y + cubeSize, z,
         x, y, z + cubeSize,
         x, y + cubeSize, z + cubeSize,
+      ]
+  }
+}
+
+function rightFaceStretch(length, height, x, y, z) {
+
+  return {
+    indices:
+      [0, 1, 2, 1, 3, 2],
+    wireframe:
+      [0,1, 1,2, 2,1, 1,3, 3,2],
+    normals:
+      [1, 0, 0,
+        1, 0, 0,
+        1, 0, 0,
+        1, 0, 0],
+    vertices:
+      [
+        x, y, z,
+        x, y + height, z,
+        x, y, z + length,
+        x, y + height, z + length,
       ]
   }
 }
@@ -273,4 +361,4 @@ function setCubeWireFrame(cubeSize, x, y, z) {
   }
 }
 
-export { backFace, frontFace, leftFace, rightFace, topFace, topFaceStretch, bottomFace, bottomFaceStretch, setCube, setCubeWireFrame };
+export { backFace, backFaceStretch, frontFace, frontFaceStretch, leftFace, leftFaceStretch, rightFace, rightFaceStretch, topFace, topFaceStretch, bottomFace, bottomFaceStretch, setCube, setCubeWireFrame };

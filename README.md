@@ -10,3 +10,5 @@ because fillRectangle is not optimized for this type of stuff.
 ![](./resources/image3.png)
 
 ![](./resources/image4.png)
+
+![](./resources/image5.png)

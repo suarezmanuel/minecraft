@@ -1,4 +1,4 @@
-import { setCube, setCubeWireFrame, leftFace, rightFace, bottomFace, topFace, topFaceStretch, bottomFaceStretch, frontFace, backFace } from "./geometry.js"
+import { setCube, setCubeWireFrame, leftFace, leftFaceStretch, rightFace, rightFaceStretch, topFace, topFaceStretch, bottomFace, bottomFaceStretch, frontFace, frontFaceStretch, backFace, backFaceStretch } from "./geometry.js"
 
 var CUBE_SIZE = 20;
 var cubeCountX = 16;
@@ -221,67 +221,75 @@ function parseChunk(arr, i, k, lodFactor) {
   const chunkSize = Math.max(CHUNK_SIZE/LOD,1);
   const cubeSize = CUBE_SIZE*LOD;
   const c = chunkSize*cubeSize;
-  const cc = chunkSize*chunkSize;
 
   for (let j=0; j<CHUNK_COUNT_Y; j++) {
 
     if (activeChunks[(i*CHUNK_COUNT_Y + j) * CHUNK_COUNT_Z + k] == 0) continue;
 
+    var t1m = new Uint8Array(chunkSize*chunkSize*chunkSize).fill(0);
+    var t2m = new Uint8Array(chunkSize*chunkSize*chunkSize).fill(0);
+
+    // initializing left, right faces greedy meshing
     for (let kk=0; kk<chunkSize; kk++) {
       for (let jj=0; jj<chunkSize; jj++) {
-
+        
         var a = [];
+        
         for (let ii=0; ii<chunkSize; ii++) {
-          a.push(arr[(ii*cc + jj*chunkSize + kk) + j*chunkSize*chunkSize*chunkSize]);
+          a.push(arr[(ii * chunkSize + jj) * chunkSize + kk + j*chunkSize*chunkSize*chunkSize]);
         }
 
         var t = parseInt(a.join(''), 2);
-        var t1 = ((t >>> 1) & (~t)) >>> 0;
-        var t2 = ((t << 1) & (~t)) >>> 0;
+        var t1 = (((t >>> 1) & (~t)) >>> 0) << 1 >>> 0;
+        var t2 = (((t << 1) & (~t)) >>> 0) >>> 1 >>> 0;
 
-        // left to right
+        var t1v = t1.toString(2).padStart(chunkSize, '0').split('');
+        var t2v = t2.toString(2).padStart(chunkSize, '0').split('');
+
+        if (arr[((chunkSize - 1) * chunkSize + jj) * chunkSize + (kk) + j * chunkSize * chunkSize * chunkSize] == 1) t1v[chunkSize - 1] = 1;
+        if (arr[(0 * chunkSize + jj) * chunkSize + (kk) + j * chunkSize * chunkSize * chunkSize] == 1) t2v[0] = 1;
+
+
         for (let ii=0; ii<chunkSize; ii++) {
-
-          if ((t1 >> ii) & 1) {
-            var ans = rightFace(cubeSize, (chunkSize-ii-1)*cubeSize + i*c, (jj)*cubeSize + j*c, kk*cubeSize + k*c);
-            indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
-            voxelBordersIndices.push.apply (voxelBordersIndices, ans.wireframe.map(o=>o+vertices.length/3));
-            vertices.push.apply(vertices, ans.vertices);
-            normals.push.apply (normals,  ans.normals);
-          } 
-
-          if ((t2 >> ii) & 1) {
-            var ans = leftFace(cubeSize, (chunkSize-ii)*cubeSize + i*c, (jj)*cubeSize + j*c, kk*cubeSize + k*c);
-            indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
-            voxelBordersIndices.push.apply (voxelBordersIndices, ans.wireframe.map(o=>o+vertices.length/3));
-            vertices.push.apply(vertices, ans.vertices);
-            normals.push.apply (normals,  ans.normals);
-          }
-
-          if (ii==0) {
-            if (arr[((ii*chunkSize + jj) * chunkSize + kk) + j*chunkSize*chunkSize*chunkSize] == 1) {
-              var ans = leftFace(cubeSize, (chunkSize-ii)*cubeSize + (i-1)*c, (jj)*cubeSize + j*c, kk*cubeSize + k*c);
-              indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
-            voxelBordersIndices.push.apply (voxelBordersIndices, ans.wireframe.map(o=>o+vertices.length/3));
-              vertices.push.apply(vertices, ans.vertices);
-              normals.push.apply (normals,  ans.normals);
-          } }
-
-          if (ii==chunkSize-1) {
-            if (arr[((ii*chunkSize + jj) * chunkSize + kk) + j*chunkSize*chunkSize*chunkSize] == 1) {
-              var ans = rightFace(cubeSize, (chunkSize-ii-1)*cubeSize + (i+1)*c, (jj)*cubeSize + j*c, kk*cubeSize + k*c);
-              indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
-              voxelBordersIndices.push.apply (voxelBordersIndices, ans.wireframe.map(o=>o+vertices.length/3));
-              vertices.push.apply(vertices, ans.vertices);
-              normals.push.apply (normals,  ans.normals);
-          } }
+          var index = (ii * chunkSize + jj) * chunkSize + kk;
+          t1m[index] = t1v[ii];
+          t2m[index] = t2v[ii];
         }
-    } }
+      }
+    }
+
+    // doing greedy meshing on left, right faces
+    for (let ii=0; ii<chunkSize; ii++) {
+
+      // t1 matrix decomposition into columns
+      var t1mDec = [];
+      var t2mDec = [];
+
+      for (let jj=0; jj<chunkSize; jj++) {
+
+        var row1 = '';
+        var row2 = '';
+
+        for (let kk = 0; kk < chunkSize; kk++) {
+
+          var index = (ii * chunkSize + jj) * chunkSize + kk;
+          row1 += t1m[index];
+          row2 += t2m[index];
+        }
+        t1mDec.push(row1);
+        t2mDec.push(row2);
+      }
+
+
+      leftGreedy(chunkSize, cubeSize, t1mDec, ii, i, j, k, c);
+    
+      rightGreedy(chunkSize, cubeSize, t2mDec, ii, i, j, k, c);
+    }
 
     var t1m = new Uint8Array(chunkSize*chunkSize*chunkSize).fill(0);
     var t2m = new Uint8Array(chunkSize*chunkSize*chunkSize).fill(0);
 
-    // initializing top, bottom faces greedy meshing
+    // initializing top, bottom 
     for (let ii=0; ii<chunkSize; ii++) {
       for (let kk=0; kk<chunkSize; kk++) {
         
@@ -310,7 +318,7 @@ function parseChunk(arr, i, k, lodFactor) {
       }
     }
 
-    // doing greedy meshing on top, bottom faces
+    // greedy meshing top, bottom
     for (let jj=0; jj<chunkSize; jj++) {
 
       // t1 matrix decomposition into columns
@@ -334,56 +342,179 @@ function parseChunk(arr, i, k, lodFactor) {
       bottomGreedy(chunkSize, cubeSize, t2mDec, jj, i, j, k, c);
     }
 
+    var t1m = new Uint8Array(chunkSize*chunkSize*chunkSize).fill(0);
+    var t2m = new Uint8Array(chunkSize*chunkSize*chunkSize).fill(0);
+
+    // initializing front, back
     for (let ii=0; ii<chunkSize; ii++) {
       for (let jj=0; jj<chunkSize; jj++) {
         
-        var a =[];
-        for (let kk=0; kk<chunkSize; kk++)  {
-          a.push(arr[(ii*cc + jj*chunkSize + kk) + j*chunkSize*chunkSize*chunkSize]);
+        var a = [];
+        
+        for (let kk=0; kk<chunkSize; kk++) {
+          a.push(arr[(ii * chunkSize + jj) * chunkSize + kk + j*chunkSize*chunkSize*chunkSize]);
         }
 
         var t = parseInt(a.join(''), 2);
-        var t1 = ((t >>> 1) & (~t)) >>> 0;
-        var t2 = ((t << 1) & (~t)) >>> 0;
+        var t1 = (((t >>> 1) & (~t)) >>> 0) << 1 >>> 0;
+        var t2 = (((t << 1) & (~t)) >>> 0) >>> 1 >>> 0;
 
-        // front to back
+        var t1v = t1.toString(2).padStart(chunkSize, '0').split('');
+        var t2v = t2.toString(2).padStart(chunkSize, '0').split('');
+
+        if (arr[((ii) * chunkSize + jj) * chunkSize + (chunkSize - 1) + j * chunkSize * chunkSize * chunkSize] == 1) t1v[chunkSize - 1] = 1;
+        if (arr[((ii) * chunkSize + jj) * chunkSize + 0 + j * chunkSize * chunkSize * chunkSize] == 1) t2v[0] = 1;
+
+
         for (let kk=0; kk<chunkSize; kk++) {
-
-          if ((t2 >> kk) & 1) {
-            var ans = backFace(cubeSize, (ii)*cubeSize+ i*c, (jj)*cubeSize + j*c, (chunkSize-kk)*cubeSize + k*c);
-            indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
-            voxelBordersIndices.push.apply (voxelBordersIndices, ans.wireframe.map(o=>o+vertices.length/3));
-            vertices.push.apply(vertices, ans.vertices);
-            normals.push.apply (normals,  ans.normals);
-          }
-
-          if ((t1 >> kk) & 1) {
-            var ans = frontFace(cubeSize, (ii)*cubeSize+ i*c, (jj)*cubeSize + j*c, (chunkSize-kk-1)*cubeSize + k*c);
-            indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
-            voxelBordersIndices.push.apply (voxelBordersIndices, ans.wireframe.map(o=>o+vertices.length/3));
-            vertices.push.apply(vertices, ans.vertices);
-            normals.push.apply (normals,  ans.normals);
-          }
-
-          if (kk==0) {
-            if (arr[((ii*chunkSize + jj) * chunkSize + kk) + j*chunkSize*chunkSize*chunkSize] == 1) {
-              var ans = backFace(cubeSize, (ii)*cubeSize+ i*c, (jj)*cubeSize + j*c, (chunkSize-kk)*cubeSize + (k-1)*c);
-              indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
-            voxelBordersIndices.push.apply (voxelBordersIndices, ans.wireframe.map(o=>o+vertices.length/3));
-              vertices.push.apply(vertices, ans.vertices);
-              normals.push.apply (normals,  ans.normals);
-          } }
-
-          if (kk==chunkSize-1) {
-            if (arr[((ii*chunkSize + jj) * chunkSize + kk) + j*chunkSize*chunkSize*chunkSize] == 1) {
-              var ans = frontFace(cubeSize, (ii)*cubeSize+ i*c, (jj)*cubeSize + j*c, (chunkSize-kk-1)*cubeSize + (k+1)*c);
-              indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
-            voxelBordersIndices.push.apply (voxelBordersIndices, ans.wireframe.map(o=>o+vertices.length/3));
-              vertices.push.apply(vertices, ans.vertices);
-              normals.push.apply (normals,  ans.normals);
-          } }
+          var index = (ii * chunkSize + jj) * chunkSize + kk;
+          t1m[index] = t1v[kk];
+          t2m[index] = t2v[kk];
         }
-    } }
+      }
+    }
+
+    // greedy meshing front, back
+    for (let kk=0; kk<chunkSize; kk++) {
+      // t1 matrix decomposition into columns
+      var t1mDec = [];
+      var t2mDec = [];
+
+      for (let jj=0; jj<chunkSize; jj++) {
+
+        var row1 = '';
+        var row2 = '';
+
+        for (let ii = 0; ii < chunkSize; ii++) {
+          var index = (ii * chunkSize + jj) * chunkSize + kk;
+          row1 += t1m[index];
+          row2 += t2m[index];
+        }
+        t1mDec.push(row1);
+        t2mDec.push(row2);
+      }
+
+
+      frontGreedy(chunkSize, cubeSize, t1mDec, kk, i, j, k, c);
+    
+      backGreedy(chunkSize, cubeSize, t2mDec, kk, i, j, k, c);
+    }
+  }
+}
+
+function leftGreedy(chunkSize, cubeSize, t1mDec, ii, i, j, k, c) {
+   // column t1
+  for (let kk=0; kk<chunkSize; kk++) {
+
+    // notice we don't zero this in the while loop
+    var consecutiveZeroes = 0;
+
+    // for every column handle all faces, turn all ones to zeroes
+    while (consecutiveZeroes != chunkSize) {
+
+      var mask     = parseInt(t1mDec[kk], 2);
+      var nextMask = parseInt(t1mDec[kk+1], 2);
+
+      // count consecutive zeroes
+      var temp = ~mask >>> 0;
+      while ((temp & 1 ) == 1) {
+        consecutiveZeroes++;
+        temp = temp >>> 1;
+      }
+
+      if (consecutiveZeroes == chunkSize) { consecutiveZeroes = 0; break; }
+
+      // count consecutive ones
+      temp = (mask >>> consecutiveZeroes);
+      var consecutiveOnes = 0;
+      while ((temp & 1 ) == 1) {
+        consecutiveOnes++;
+        temp = temp >>> 1;
+      }
+
+      // mask of merged walls
+      var compare = (((1 << consecutiveOnes)-1) << consecutiveZeroes) >>> 0;
+
+      t1mDec[kk] = ((mask & (~compare)) >>> 0).toString(2).padStart(chunkSize, 0);
+
+      var matchesCount = 0;
+
+      while ((compare & nextMask) == compare) {
+        matchesCount++;
+        // zero the next match
+        t1mDec[kk+matchesCount] = ((nextMask & (~compare)) >>> 0).toString(2).padStart(chunkSize, 0);
+        // we wont expand further if we are at the chunk's end
+        nextMask = parseInt(t1mDec[kk+matchesCount+1], 2);
+      }
+
+      // create extended triangle
+      // consecutive zeroes is the Z start, consecutive ones is the height at Z, matchesCount+1 is the width at X
+      var ans = rightFaceStretch(consecutiveOnes*cubeSize, (matchesCount+1)*cubeSize, (ii+1)*cubeSize + i*c, (kk)*cubeSize + j*c, (chunkSize-consecutiveOnes-consecutiveZeroes)*cubeSize + k*c);
+      indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
+      voxelBordersIndices.push.apply (voxelBordersIndices, ans.wireframe.map(o=>o+vertices.length/3));
+      vertices.push.apply(vertices, ans.vertices);
+      normals.push.apply (normals,  ans.normals);
+
+      consecutiveZeroes = 0;
+    }
+  }
+}
+
+function rightGreedy(chunkSize, cubeSize, t2mDec, ii, i, j, k, c) {
+   // column t1
+  for (let kk=0; kk<chunkSize; kk++) {
+
+    // notice we don't zero this in the while loop
+    var consecutiveZeroes = 0;
+
+    // for every column handle all faces, turn all ones to zeroes
+    while (consecutiveZeroes != chunkSize) {
+
+      var mask     = parseInt(t2mDec[kk], 2);
+      var nextMask = parseInt(t2mDec[kk+1], 2);
+
+      // count consecutive zeroes
+      var temp = ~mask >>> 0;
+      while ((temp & 1 ) == 1) {
+        consecutiveZeroes++;
+        temp = temp >>> 1;
+      }
+
+      if (consecutiveZeroes == chunkSize) { consecutiveZeroes = 0; break; }
+
+      // count consecutive ones
+      temp = (mask >>> consecutiveZeroes);
+      var consecutiveOnes = 0;
+      while ((temp & 1 ) == 1) {
+        consecutiveOnes++;
+        temp = temp >>> 1;
+      }
+
+      // mask of merged walls
+      var compare = (((1 << consecutiveOnes)-1) << consecutiveZeroes) >>> 0;
+
+      t2mDec[kk] = ((mask & (~compare)) >>> 0).toString(2).padStart(chunkSize, 0);
+
+      var matchesCount = 0;
+
+      while ((compare & nextMask) == compare) {
+        matchesCount++;
+        // zero the next match
+        t2mDec[kk+matchesCount] = ((nextMask & (~compare)) >>> 0).toString(2).padStart(chunkSize, 0);
+        // we wont expand further if we are at the chunk's end
+        nextMask = parseInt(t2mDec[kk+matchesCount+1], 2);
+      }
+
+      // create extended triangle
+      // consecutive zeroes is the Z start, consecutive ones is the height at Z, matchesCount+1 is the width at X
+      var ans = leftFaceStretch(consecutiveOnes*cubeSize, (matchesCount+1)*cubeSize, (ii)*cubeSize + i*c, (kk)*cubeSize + j*c, (chunkSize-consecutiveOnes-consecutiveZeroes)*cubeSize + k*c);
+      indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
+      voxelBordersIndices.push.apply (voxelBordersIndices, ans.wireframe.map(o=>o+vertices.length/3));
+      vertices.push.apply(vertices, ans.vertices);
+      normals.push.apply (normals,  ans.normals);
+
+      consecutiveZeroes = 0;
+    }
   }
 }
 
@@ -493,6 +624,122 @@ function bottomGreedy(chunkSize, cubeSize, t2mDec, jj, i, j, k, c) {
       // create extended triangle
       // consecutive zeroes is the Z start, consecutive ones is the height at Z, matchesCount+1 is the width at X
       var ans = bottomFaceStretch((matchesCount+1)*cubeSize, consecutiveOnes*cubeSize, (chunkSize-consecutiveOnes-consecutiveZeroes)*cubeSize + i*c, (jj)*cubeSize + j*c, (ii)*cubeSize + k*c);
+      indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
+      voxelBordersIndices.push.apply (voxelBordersIndices, ans.wireframe.map(o=>o+vertices.length/3));
+      vertices.push.apply(vertices, ans.vertices);
+      normals.push.apply (normals,  ans.normals);
+
+      consecutiveZeroes = 0;
+    }
+  }
+}
+
+function frontGreedy(chunkSize, cubeSize, t1mDec, kk, i, j, k, c) {
+  // column t2
+  for (let jj=0; jj<chunkSize; jj++) {
+
+    // notice we don't zero this in the while loop
+    var consecutiveZeroes = 0;
+
+    // for every column handle all faces, turn all ones to zeroes
+    while (consecutiveZeroes != chunkSize) {
+
+      var mask     = parseInt(t1mDec[jj], 2);
+      var nextMask = parseInt(t1mDec[jj+1], 2);
+
+      // count consecutive zeroes
+      var temp = ~mask >>> 0;
+      while ((temp & 1 ) == 1) {
+        consecutiveZeroes++;
+        temp = temp >>> 1;
+      }
+
+      if (consecutiveZeroes == chunkSize) { consecutiveZeroes = 0; break; }
+
+      // count consecutive ones
+      temp = (mask >>> consecutiveZeroes);
+      var consecutiveOnes = 0;
+      while ((temp & 1 ) == 1) {
+        consecutiveOnes++;
+        temp = temp >>> 1;
+      }
+
+      // mask of merged walls
+      var compare = (((1 << consecutiveOnes)-1) << consecutiveZeroes) >>> 0;
+
+      t1mDec[jj] = ((mask & (~compare)) >>> 0).toString(2).padStart(chunkSize, 0);
+
+      var matchesCount = 0;
+
+      while ((compare & nextMask) == compare) {
+        matchesCount++;
+        // zero the next match
+        t1mDec[jj+matchesCount] = ((nextMask & (~compare)) >>> 0).toString(2).padStart(chunkSize, 0);
+        // we wont expand further if we are at the chunk's end
+        nextMask = parseInt(t1mDec[jj+matchesCount+1], 2);
+      }
+
+      // create extended triangle
+      // consecutive zeroes is the Z start, consecutive ones is the height at Z, matchesCount+1 is the width at X
+      var ans = frontFaceStretch((matchesCount+1)*cubeSize, consecutiveOnes*cubeSize, (chunkSize-consecutiveOnes-consecutiveZeroes)*cubeSize + i*c, (jj)*cubeSize + j*c, (kk+1)*cubeSize + k*c);
+      indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
+      voxelBordersIndices.push.apply (voxelBordersIndices, ans.wireframe.map(o=>o+vertices.length/3));
+      vertices.push.apply(vertices, ans.vertices);
+      normals.push.apply (normals,  ans.normals);
+
+      consecutiveZeroes = 0;
+    }
+  }
+}
+
+function backGreedy(chunkSize, cubeSize, t2mDec, kk, i, j, k, c) {
+  // column t2
+  for (let jj=0; jj<chunkSize; jj++) {
+
+    // notice we don't zero this in the while loop
+    var consecutiveZeroes = 0;
+
+    // for every column handle all faces, turn all ones to zeroes
+    while (consecutiveZeroes != chunkSize) {
+
+      var mask     = parseInt(t2mDec[jj], 2);
+      var nextMask = parseInt(t2mDec[jj+1], 2);
+
+      // count consecutive zeroes
+      var temp = ~mask >>> 0;
+      while ((temp & 1 ) == 1) {
+        consecutiveZeroes++;
+        temp = temp >>> 1;
+      }
+
+      if (consecutiveZeroes == chunkSize) { consecutiveZeroes = 0; break; }
+
+      // count consecutive ones
+      temp = (mask >>> consecutiveZeroes);
+      var consecutiveOnes = 0;
+      while ((temp & 1 ) == 1) {
+        consecutiveOnes++;
+        temp = temp >>> 1;
+      }
+
+      // mask of merged walls
+      var compare = (((1 << consecutiveOnes)-1) << consecutiveZeroes) >>> 0;
+
+      t2mDec[jj] = ((mask & (~compare)) >>> 0).toString(2).padStart(chunkSize, 0);
+
+      var matchesCount = 0;
+
+      while ((compare & nextMask) == compare) {
+        matchesCount++;
+        // zero the next match
+        t2mDec[jj+matchesCount] = ((nextMask & (~compare)) >>> 0).toString(2).padStart(chunkSize, 0);
+        // we wont expand further if we are at the chunk's end
+        nextMask = parseInt(t2mDec[jj+matchesCount+1], 2);
+      }
+
+      // create extended triangle
+      // consecutive zeroes is the Z start, consecutive ones is the height at Z, matchesCount+1 is the width at X
+      var ans = backFaceStretch((matchesCount+1)*cubeSize, consecutiveOnes*cubeSize, (chunkSize-consecutiveOnes-consecutiveZeroes)*cubeSize + i*c, (jj)*cubeSize + j*c, (kk)*cubeSize + k*c);
       indices.push.apply (indices,  ans.indices.map(o=>o+vertices.length/3));
       voxelBordersIndices.push.apply (voxelBordersIndices, ans.wireframe.map(o=>o+vertices.length/3));
       vertices.push.apply(vertices, ans.vertices);
